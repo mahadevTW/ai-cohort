@@ -40,7 +40,7 @@ The script runs 7 steps and logs `[OK]` for each one:
 | 1 | Finds Python 3.12+ on your machine |
 | 2 | Creates a virtual environment (`venv/`) |
 | 3 | Installs all packages from `requirements.txt` |
-| 4 | Registers the **AI Meetup (Python 3.12)** Jupyter kernel |
+| 4 | Registers the ** (Python 3.12)** Jupyter kernel |
 | 5 | Installs the **Jupyter** and **Python** VS Code extensions |
 | 6 | Imports every required package and prints its version |
 | 7 | Executes `notebooks/test_setup.ipynb` end-to-end in the terminal |
@@ -112,7 +112,7 @@ code .
 
 Inside VS Code:
 1. Open `notebooks/test_setup.ipynb`
-2. Kernel selector (top-right corner) → **AI Meetup (Python 3.12)**
+2. Kernel selector (top-right corner) → **(Python 3.12)**
 3. Run All (`Shift+Enter` cell by cell, or the ▶▶ button)
 
 ### Browser
@@ -128,7 +128,7 @@ venv\Scripts\Activate.ps1
 jupyter notebook notebooks\
 ```
 
-Opens at `http://localhost:8888`. Select **AI Meetup (Python 3.12)** from the Kernel menu.
+Opens at `http://localhost:8888`. Select **(Python 3.12)** from the Kernel menu.
 
 ---
 
@@ -141,15 +141,15 @@ echo 'export PATH="/opt/homebrew/bin:$PATH"' >> ~/.zshrc && source ~/.zshrc
 ```
 
 **Wrong kernel / `ModuleNotFoundError` in notebook**
-Click the kernel name (top-right in VS Code, or Kernel menu in Jupyter) and switch to **AI Meetup (Python 3.12)**.
+Click the kernel name (top-right in VS Code, or Kernel menu in Jupyter) and switch to **(Python 3.12)**.
 If it is not listed, run this from inside the repo directory:
 ```bash
 source venv/bin/activate   # Mac/Linux
-python -m ipykernel install --user --name=meetup --display-name="AI Meetup (Python 3.12)"
+python -m ipykernel install --user --name=meetup --display-name="ai-cohort (Python 3.12)"
 ```
 ```powershell
 venv\Scripts\Activate.ps1  # Windows
-python -m ipykernel install --user --name=meetup --display-name="AI Meetup (Python 3.12)"
+python -m ipykernel install --user --name=meetup --display-name="ai-cohort (Python 3.12)"
 ```
 
 **`pip install` fails — SSL error (corporate network)**
@@ -161,7 +161,7 @@ pip install -r requirements.txt --trusted-host pypi.org --trusted-host files.pyt
 You are in the wrong directory. Make sure you are inside `ai-cohort\`.
 
 **Packages install but notebook still shows import errors**
-The notebook is on the wrong kernel. Select **AI Meetup (Python 3.12)** and restart the kernel (`Kernel → Restart`).
+The notebook is on the wrong kernel. Select **(Python 3.12)** and restart the kernel (`Kernel → Restart`).
 
 **Step 7 fails — notebook execution error**
 The terminal output shows which cell failed and the exact Python traceback.
