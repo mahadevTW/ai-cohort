@@ -34,7 +34,7 @@ The script will:
 - Find or prompt you to install Python 3.12+
 - Create a virtual environment
 - Install all dependencies
-- Register the **AI Meetup (Python 3.12)** Jupyter kernel
+- Register the (Python 3.12)** Jupyter kernel
 - Install the required VS Code extensions
 - Execute `notebooks/test_setup.ipynb` in the terminal to confirm everything works
 
@@ -66,7 +66,7 @@ code .
 Then:
 1. Open any notebook under `notebooks/`
 2. Click the kernel selector in the **top-right corner**
-3. Choose **AI Meetup (Python 3.12)**
+3. Choose **(Python 3.12)**
 4. Run cells with `Shift+Enter`
 
 ### Browser

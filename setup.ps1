@@ -265,7 +265,7 @@ Write-Host "  [4/7] Registering Jupyter kernel" -ForegroundColor White
 
 python -m ipykernel install --user --name=meetup --display-name="AI Meetup ($PYTHON_VERSION)" 2>$null
 if ($LASTEXITCODE -eq 0) {
-    ok "Kernel 'AI Meetup ($PYTHON_VERSION)' registered"
+    ok "Kernel 'ai-cohort ($PYTHON_VERSION)' registered"
 } else {
     warn "Kernel registration reported an issue -- notebooks may still work"
     warn "If the kernel is missing later, run:"
