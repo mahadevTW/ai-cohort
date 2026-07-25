@@ -5,4 +5,16 @@
 4. Task; come up with HLD and LLD
         HLD : high level application diagram
         LLD : db design , api design changes, how db will integrate in api
-        
+
+
+
+## python topics
+
+1. Classes
+2. Modules
+3. List
+4. Dict
+5. Iterations over dict and lists
+6. Rest api all methods - GET put, POST
+7. how to call other modules
+6. SQL queries
