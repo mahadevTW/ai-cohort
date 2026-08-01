@@ -79,3 +79,5 @@ coverage/
 dist/
 build/
 coverage/
+
+data/
