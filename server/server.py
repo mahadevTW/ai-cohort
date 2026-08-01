@@ -21,6 +21,7 @@ def health():
 
 @app.post("/chat")
 def chat_endpoint(message: str):
+    print("chat_endpoint entered")
     # make api call to some model provider and generate response and give it back to the user
     response = openai_chat(message)
     return {"response": response}
