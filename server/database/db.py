@@ -42,7 +42,13 @@ def select_all_chat_messages_for_session_id  (session_id : str):
 def select_chat_session_by_id(session_id: str):
     with Session(session_engine) as session:
         return session.get(ChatSession, session_id)
-        
+
+
+def select_user_by_id(user_id: str):
+    with Session(session_engine) as session:
+        return session.get(User, user_id)
+
+
 def select_all_chat_sessions_for_userid(user_id: str):
     with Session(session_engine) as session:
         statement = select(ChatSession).where(

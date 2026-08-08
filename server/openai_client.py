@@ -1,8 +1,20 @@
+import os
+
 import httpx
+from dotenv import load_dotenv
 
 from database.models import ChatMessage
+
+load_dotenv()
+
+
 def openai_chat(message, history=list[ChatMessage]()):
     prev_history = [{"role": msg.role, "content": msg.message} for msg in history]
+
+    api_key = os.getenv("OPENAI_KEY") or os.getenv("OPENAI_API_KEY")
+    if not api_key:
+        raise RuntimeError("OPENAI_KEY environment variable is not set")
+
     # make api call to open ai api and generate response and give it back to the user
     request_body = {
         "model": "gpt-5-mini",
@@ -18,11 +30,13 @@ def openai_chat(message, history=list[ChatMessage]()):
             }
         ]
     }
-    response = httpx.post("https://api.openai.com/v1/chat/completions",
-                          headers={"Authorization": f"Bearer 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", "Content-Type": "application/json"},
-                          json=request_body, timeout=30)
+    response = httpx.post(
+        "https://api.openai.com/v1/chat/completions",
+        headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"},
+        json=request_body,
+        timeout=30,
+    )
     if response.status_code == 200:
         return response.json()["choices"][0]["message"]["content"]
     else:
         return f"Error: {response.status_code} - {response.text}"
-    

@@ -1,9 +1,11 @@
 import uuid
 
+import httpx
 from sqlmodel import SQLModel, create_engine
 
 import database.db as repository
 from database.models import User, ChatSession, ChatMessage, MessageRole
+from openai_client import openai_chat
 
 
 def setup_module():
@@ -17,6 +19,49 @@ def setup_module():
     repository.session_engine = engine
 
     SQLModel.metadata.create_all(engine)
+
+
+def test_openai_chat_uses_openai_key_env_var(monkeypatch):
+    class FakeResponse:
+        status_code = 200
+        text = ""
+
+        def json(self):
+            return {"choices": [{"message": {"content": "Hi there"}}]}
+
+    captured = {}
+
+    def fake_post(url, headers, json, timeout):
+        captured["url"] = url
+        captured["headers"] = headers
+        captured["json"] = json
+        captured["timeout"] = timeout
+        return FakeResponse()
+
+    monkeypatch.setenv("OPENAI_KEY", "env-test-key")
+    monkeypatch.setattr(httpx, "post", fake_post)
+
+    response = openai_chat("Test question")
+
+    assert response == "Hi there"
+    assert captured["url"] == "https://api.openai.com/v1/chat/completions"
+    assert captured["headers"]["Authorization"] == "Bearer env-test-key"
+    assert captured["headers"]["Content-Type"] == "application/json"
+
+
+def test_select_user_by_id_existing_user():
+    user = User(
+        id=uuid.uuid4(),
+        name="Lookup User"
+    )
+
+    repository.insert_user(user)
+
+    found = repository.select_user_by_id(user.id)
+
+    assert found is not None
+    assert found.id == user.id
+    assert found.name == "Lookup User"
 
 
 def test_insert_user():

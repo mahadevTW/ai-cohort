@@ -4,7 +4,7 @@ from uuid import UUID
 
 from database.models import ChatMessage, ChatSession, User
 from fastapi import FastAPI, HTTPException, Request
-from database.db import create_db_and_tables, insert_chat_message, insert_chat_session, insert_user, select_all_chat_messages_for_session_id, select_all_chat_sessions_for_userid, select_chat_session_by_id
+from database.db import create_db_and_tables, insert_chat_message, insert_chat_session, insert_user, select_all_chat_messages_for_session_id, select_all_chat_sessions_for_userid, select_chat_session_by_id, select_user_by_id
 from openai_client import openai_chat
 import uvicorn
 from fastapi.templating import Jinja2Templates
@@ -24,7 +24,6 @@ def root(request: Request):
 def health():
     return {"status": "healthy"}
 
-
 @app.post("/users", status_code=201)
 def create_user(user: User):
     user.name = user.name.strip()
@@ -36,6 +35,10 @@ def create_user(user: User):
 
 @app.get("/users/{user_id}/sessions")
 def get_user_sessions(user_id: UUID):
+    user = select_user_by_id(user_id)
+    if not user:
+        raise HTTPException(status_code=404, detail="Invalid user id")
+
     sessions = select_all_chat_sessions_for_userid(user_id)
     return [
         {
@@ -71,30 +74,45 @@ def chat_endpoint(message: Optional[str] = None, user_id: Optional[str] = None, 
     if not session_id:
         if not user_id:
             raise HTTPException(status_code=400, detail="user_id is required to create a chat session")
-        title = chat_title.strip() if chat_title else ""
+
+        try:
+            user_uuid = UUID(user_id)
+        except (TypeError, ValueError):
+            raise HTTPException(status_code=400, detail="Invalid user id")
+
+        if not select_user_by_id(user_uuid):
+            raise HTTPException(status_code=404, detail="Invalid user id")
+
+        title = (chat_title.strip() if chat_title else "").strip()
+        if not title and message and message.strip():
+            title = message.strip()
+
+        # When the UI sends the first message, use that message as the initial session title.
+        # A dedicated chat title is optional.
         if not title:
-            raise HTTPException(status_code=400, detail="chat_title is required to create a chat session")
-        #create new session id
-        session = insert_chat_session(chat_session=ChatSession(user_id=UUID(user_id), session_title=title))
+            title = "New chat"
+
+        # create new session id
+        session = insert_chat_session(chat_session=ChatSession(user_id=UUID(user_id), session_title=title[:100]))
         # Calling /chat without a message starts an empty chat session.
         if not message or not message.strip():
             return {"session_id": session.id}
         response = openai_chat(message)
-        insert_chat_message(chat_message = ChatMessage(message=message, role="user", session_id=session.id, user_id=session.user_id))
-        insert_chat_message(chat_message = ChatMessage(message=response, role="assistant", session_id=session.id, user_id=session.user_id))
-        return {"response": response,"session_id": session.id}
+        insert_chat_message(chat_message=ChatMessage(message=message, role="user", session_id=session.id, user_id=session.user_id))
+        insert_chat_message(chat_message=ChatMessage(message=response, role="assistant", session_id=session.id, user_id=session.user_id))
+        return {"response": response, "session_id": session.id}
     if not message or not message.strip():
         raise HTTPException(status_code=400, detail="message is required for an existing chat session")
-    sid=UUID(session_id)
+    sid = UUID(session_id)
     chat_session = select_chat_session_by_id(session_id=sid)
     if not chat_session:
         raise HTTPException(status_code=404, detail="Chat session not found")
     messages = select_all_chat_messages_for_session_id(session_id=sid)
-    response = openai_chat(message,history=messages)
-    #save original message into db and save chat response into db
-    insert_chat_message(chat_message = ChatMessage(message=message, role="user", session_id=sid, user_id=chat_session.user_id))
-    insert_chat_message(chat_message = ChatMessage(message=response, role="assistant", session_id=sid, user_id=chat_session.user_id))
-    return {"response": response,"session_id": session_id}
+    response = openai_chat(message, history=messages)
+    # save original message into db and save chat response into db
+    insert_chat_message(chat_message=ChatMessage(message=message, role="user", session_id=sid, user_id=chat_session.user_id))
+    insert_chat_message(chat_message=ChatMessage(message=response, role="assistant", session_id=sid, user_id=chat_session.user_id))
+    return {"response": response, "session_id": session_id}
     # make api call to some model provider and generate response and give it back to the user
 
 if __name__ == "__main__":

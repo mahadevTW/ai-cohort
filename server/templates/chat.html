@@ -62,18 +62,15 @@
 
 </div>
 
-<div id="nameModal" role="dialog" aria-modal="true" aria-labelledby="nameModalTitle"
+<div id="userModal" role="dialog" aria-modal="true" aria-labelledby="userModalTitle"
      style="display:none;position:fixed;inset:0;background:rgba(15,23,42,.55);align-items:center;justify-content:center;padding:20px;">
-    <form id="nameForm" style="width:100%;max-width:340px;background:white;border-radius:12px;padding:24px;box-shadow:0 12px 30px rgba(0,0,0,.25);">
-        <h2 id="nameModalTitle" style="margin:0 0 8px;font-size:21px;color:#111827;">Start your chat</h2>
-        <p style="margin:0 0 16px;color:#6b7280;font-size:14px;">Enter your name and a title for the conversation.</p>
-        <input id="nameInput" type="text" autocomplete="name" maxlength="80" required
-               placeholder="Your name"
+    <form id="userForm" style="width:100%;max-width:340px;background:white;border-radius:12px;padding:24px;box-shadow:0 12px 30px rgba(0,0,0,.25);">
+        <h2 id="userModalTitle" style="margin:0 0 8px;font-size:21px;color:#111827;">Start your chat</h2>
+        <p style="margin:0 0 16px;color:#6b7280;font-size:14px;">Enter your user id to continue.</p>
+        <input id="userIdInput" type="text" autocomplete="off" maxlength="80" required
+               placeholder="User ID"
                style="box-sizing:border-box;width:100%;padding:10px;border:1px solid #ccc;border-radius:8px;outline:none;font-size:15px;" />
-        <input id="initialChatTitleInput" type="text" maxlength="100" required
-               placeholder="Chat title"
-               style="box-sizing:border-box;width:100%;margin-top:10px;padding:10px;border:1px solid #ccc;border-radius:8px;outline:none;font-size:15px;" />
-        <div id="nameError" style="min-height:18px;margin-top:5px;color:#dc2626;font-size:13px;"></div>
+        <div id="userError" style="min-height:18px;margin-top:5px;color:#dc2626;font-size:13px;"></div>
         <button type="submit"
                 style="width:100%;padding:10px;border:none;border-radius:8px;background:#2563eb;color:white;cursor:pointer;font-weight:bold;">
             Start chat
@@ -81,56 +78,17 @@
     </form>
 </div>
 
-<div id="newChatModal" role="dialog" aria-modal="true" aria-labelledby="newChatModalTitle"
-     style="display:none;position:fixed;inset:0;background:rgba(15,23,42,.55);align-items:center;justify-content:center;padding:20px;">
-    <form id="newChatForm" style="width:100%;max-width:340px;background:white;border-radius:12px;padding:24px;box-shadow:0 12px 30px rgba(0,0,0,.25);">
-        <h2 id="newChatModalTitle" style="margin:0 0 8px;font-size:21px;color:#111827;">Start a new chat</h2>
-        <p style="margin:0 0 16px;color:#6b7280;font-size:14px;">Enter a title for this conversation.</p>
-        <input id="newChatTitleInput" type="text" maxlength="100" required placeholder="Chat title"
-               style="box-sizing:border-box;width:100%;padding:10px;border:1px solid #ccc;border-radius:8px;outline:none;font-size:15px;" />
-        <div id="newChatError" style="min-height:18px;margin-top:5px;color:#dc2626;font-size:13px;"></div>
-        <div style="display:flex;gap:10px;">
-            <button type="button" onclick="closeNewChatModal()"
-                    style="flex:1;padding:10px;border:1px solid #ccc;border-radius:8px;background:white;cursor:pointer;font-weight:bold;">Cancel</button>
-            <button type="submit"
-                    style="flex:1;padding:10px;border:none;border-radius:8px;background:#2563eb;color:white;cursor:pointer;font-weight:bold;">Start chat</button>
-        </div>
-    </form>
-</div>
-
 <script>
 const API_URL = "/chat";
-let participantName = "";
 let userId = null;
 let sessionId = null;
 let currentChatTitle = "";
 
-const nameModal = document.getElementById("nameModal");
-const nameInput = document.getElementById("nameInput");
-const initialChatTitleInput = document.getElementById("initialChatTitleInput");
-const newChatModal = document.getElementById("newChatModal");
-const newChatTitleInput = document.getElementById("newChatTitleInput");
-
-async function createChatSession(chatTitle) {
-    const response = await fetch(
-        API_URL + "?user_id=" + encodeURIComponent(userId) +
-        "&chat_title=" + encodeURIComponent(chatTitle),
-        { method: "POST", headers: { "accept": "application/json" } }
-    );
-    const data = await response.json();
-
-    if (!response.ok) {
-        throw new Error(data.detail || "Unable to create chat session.");
-    }
-
-    sessionId = data.session_id;
-    currentChatTitle = chatTitle;
-    document.title = participantName + " - " + currentChatTitle;
-    await loadChatHistory();
-}
+const userModal = document.getElementById("userModal");
+const userIdInput = document.getElementById("userIdInput");
 
 function enableChatInterface() {
-    document.getElementById("userName").innerText = "— " + participantName;
+    document.getElementById("userName").innerText = "— " + userId;
     document.getElementById("messageInput").disabled = false;
     document.getElementById("messageInput").placeholder = "Type your message...";
     document.getElementById("sendButton").disabled = false;
@@ -164,11 +122,23 @@ async function loadChatHistory() {
             const tile = document.createElement("button");
             tile.type = "button";
             tile.dataset.sessionId = chatSession.id;
-            tile.innerText = chatSession.title;
-            tile.title = chatSession.title;
-            tile.style.cssText = "width:100%;padding:11px 12px;border:0;border-radius:8px;text-align:left;color:white;cursor:pointer;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;";
+            tile.style.cssText = "width:100%;padding:11px 12px;border:0;border-radius:8px;text-align:left;color:white;cursor:pointer;overflow:hidden;";
             tile.style.background = chatSession.id === sessionId ? "#2563eb" : "#1f2937";
             tile.onclick = () => openChatSession(chatSession.id, chatSession.title);
+
+            const title = document.createElement("div");
+            title.innerText = chatSession.title;
+            title.title = chatSession.title;
+            title.style.cssText = "font-weight:bold;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;";
+
+            const stamp = document.createElement("div");
+            const createdAt = new Date(chatSession.created_at);
+            stamp.innerText = createdAt.toLocaleString();
+            stamp.title = createdAt.toLocaleString();
+            stamp.style.cssText = "margin-top:4px;color:#cbd5e1;font-size:11px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;";
+
+            tile.appendChild(title);
+            tile.appendChild(stamp);
             history.appendChild(tile);
         });
     } catch (err) {
@@ -197,7 +167,7 @@ async function openChatSession(selectedSessionId, chatTitle) {
 
         sessionId = selectedSessionId;
         currentChatTitle = chatTitle;
-        document.title = participantName + " - " + currentChatTitle;
+        document.title = "User " + userId + " - " + currentChatTitle;
         chatBox.innerHTML = "";
 
         if (!messages.length) {
@@ -220,90 +190,91 @@ async function openChatSession(selectedSessionId, chatTitle) {
     }
 }
 
-function openNameModal() {
-    if (participantName) return;
-    nameModal.style.display = "flex";
-    nameInput.focus();
+function openUserModal() {
+    if (userId) return;
+    userModal.style.display = "flex";
+    userIdInput.focus();
 }
 
 document.addEventListener("keydown", (event) => {
-    if (event.key === "/" && !participantName && nameModal.style.display !== "flex") {
+    if (event.key === "/" && !userId && userModal.style.display !== "flex") {
         event.preventDefault();
-        openNameModal();
+        openUserModal();
     }
 });
 
-document.getElementById("nameForm").addEventListener("submit", async (event) => {
-    event.preventDefault();
-    const name = nameInput.value.trim();
-    const chatTitle = initialChatTitleInput.value.trim();
-    const error = document.getElementById("nameError");
+async function validateEnteredUserId(enteredUserId) {
+    const validationResponse = await fetch(
+        "/users/" + encodeURIComponent(enteredUserId) + "/sessions"
+    );
 
-    if (!name) {
-        error.innerText = "Please enter your name.";
-        nameInput.focus();
-        return;
+    if (!validationResponse.ok) {
+        throw new Error("Invalid user id");
     }
-    if (!chatTitle) {
-        error.innerText = "Please enter a chat title.";
-        initialChatTitleInput.focus();
+
+    return validationResponse.json();
+}
+
+document.getElementById("userForm").addEventListener("submit", async (event) => {
+    event.preventDefault();
+    const enteredUserId = userIdInput.value.trim();
+    const error = document.getElementById("userError");
+
+    if (!enteredUserId) {
+        error.innerText = "Please enter your user id.";
+        userIdInput.focus();
         return;
     }
 
     error.innerText = "";
 
     try {
-        const response = await fetch("/users", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ name })
-        });
-        const data = await response.json();
-
-        if (!response.ok) {
-            throw new Error(data.detail || "Unable to create user.");
-        }
-
-        participantName = data.name;
-        userId = data.id;
-        await createChatSession(chatTitle);
+        await validateEnteredUserId(enteredUserId);
+        userId = enteredUserId;
+        enableChatInterface();
+        userModal.style.display = "none";
+        addMessage("Welcome! How can I help you?", false);
+        document.getElementById("messageInput").focus();
     } catch (err) {
-        error.innerText = "Unable to start chat. Please try again.";
+        error.innerText = "Invalid user id. Please enter a correct user id.";
         console.error(err);
         return;
     }
-
-    enableChatInterface();
-    nameModal.style.display = "none";
-    addMessage("Welcome, " + participantName + "! How can I help you?", false);
-    document.getElementById("messageInput").focus();
 });
 
 window.addEventListener("DOMContentLoaded", () => {
     const params = new URLSearchParams(window.location.search);
     const existingUserId = params.get("user_id");
-    const existingName = params.get("name");
 
-    if (existingUserId && existingName) {
+    if (existingUserId) {
         userId = existingUserId;
-        participantName = existingName;
-        enableChatInterface();
-        startNewChat();
+        validateEnteredUserId(existingUserId)
+            .then(() => {
+                enableChatInterface();
+                startNewChat();
+            })
+            .catch((err) => {
+                userId = null;
+                userIdInput.value = existingUserId;
+                userModal.style.display = "flex";
+                const error = document.getElementById("userError");
+                error.innerText = "Invalid user id. Please enter a correct user id.";
+                console.error(err);
+            });
         return;
     }
 
-    openNameModal();
+    openUserModal();
 });
 
 async function startNewChat() {
-    if (!participantName) {
-        openNameModal();
+    if (!userId) {
+        openUserModal();
         return;
     }
 
     if (sessionId) {
-        const url = "/?user_id=" + encodeURIComponent(userId) +
-            "&name=" + encodeURIComponent(participantName);
+        const url = "/?user_id=" + encodeURIComponent(userId);
         const newWindow = window.open(url, "_blank");
         if (!newWindow) {
             addMessage("Please allow pop-ups to open a new chat window.", false);
@@ -311,45 +282,11 @@ async function startNewChat() {
         return;
     }
 
-    newChatTitleInput.value = "";
-    document.getElementById("newChatError").innerText = "";
-    newChatModal.style.display = "flex";
-    newChatTitleInput.focus();
-}
-
-function closeNewChatModal() {
-    newChatModal.style.display = "none";
-}
-
-document.getElementById("newChatForm").addEventListener("submit", async (event) => {
-    event.preventDefault();
-    const chatTitle = newChatTitleInput.value.trim();
-    const error = document.getElementById("newChatError");
-    if (!chatTitle) {
-        error.innerText = "Please enter a chat title.";
-        newChatTitleInput.focus();
-        return;
-    }
-
-    const newChatButton = document.getElementById("newChatButton");
-    newChatButton.disabled = true;
-
-    try {
-        await createChatSession(chatTitle);
-    } catch (err) {
-        error.innerText = "Unable to start a new chat. Please try again.";
-        console.error(err);
-        return;
-    } finally {
-        newChatButton.disabled = false;
-    }
-
-    closeNewChatModal();
     document.getElementById("chatBox").innerHTML = "";
     document.getElementById("messageInput").value = "";
-    addMessage("New chat started. How can I help you, " + participantName + "?", false);
-    document.getElementById("messageInput").focus();
-});
+    sessionId = null;
+    currentChatTitle = "";
+}
 
 function addMessage(text, isUser) {
     const chatBox = document.getElementById("chatBox");
@@ -392,8 +329,8 @@ function addMessage(text, isUser) {
 }
 
 async function sendMessage() {
-    if (!participantName) {
-        openNameModal();
+    if (!userId) {
+        openUserModal();
         return;
     }
 
