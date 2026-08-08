@@ -131,3 +131,9 @@ sequenceDiagram
 2. scaling the sessions
 3. moving away from direct api to Open AI sdk
 4. Understanding system prompt and role based prompt
+
+
+=====================================================
+1. Finish compaction api and recompaction
+2. Try to pass compacted message to openai message
+3. convert open ai api to Openai sdk

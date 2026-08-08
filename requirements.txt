@@ -6,3 +6,7 @@ pandas==3.0.3
 requests==2.34.2
 sqlmodel==0.0.24
 pytest
+dotenv
+openai
+sqlmodel
+tiktoken

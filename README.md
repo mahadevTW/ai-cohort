@@ -89,6 +89,32 @@ jupyter notebook notebooks\
 | — | `test_setup.ipynb` | Verify your environment (run this first) |
 ---
 
+## Chat Server
+
+The chat app lives in `server/`. From the repo root, with the venv activated:
+
+```bash
+source venv/bin/activate
+python server/server.py
+```
+
+This starts the API on `http://localhost:8000` and creates `data/database.db` on first run.
+
+### Database Migrations
+
+Schema changes are managed with [Alembic](https://alembic.sqlalchemy.org/) (`server/alembic/`), not manual SQL. On every startup, `create_db_and_tables()` in `server/database/db.py` applies any pending migrations automatically — you don't need to run anything by hand to pick up a schema change made by someone else.
+
+When *you* change a model in `server/database/models.py`, generate the migration for it:
+
+```bash
+source venv/bin/activate
+alembic -c server/alembic.ini revision --autogenerate -m "describe the change"
+```
+
+Then open the generated file under `server/alembic/versions/` and check it did what you expect before committing it — autogenerate is a diff, so it can't tell a renamed column from a dropped-and-added one. The next `python server/server.py` (by you or anyone who pulls your change) will apply it automatically.
+
+---
+
 ## Troubleshooting
 
 See **[setup.md](setup.md)** for detailed setup instructions and a full troubleshooting section.

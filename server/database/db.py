@@ -1,7 +1,11 @@
+import os
+
+from alembic import command
+from alembic.config import Config
 from requests import session
 from sqlmodel import UUID, Session, create_engine, select
 from sqlmodel import SQLModel, create_engine
-from database.models import User, ChatSession, ChatMessage
+from database.models import User, ChatSession, ChatMessage, CompactionResult
 db_file = "data/database.db"
 db_url = f"sqlite:///{db_file}"
 
@@ -31,9 +35,16 @@ def insert_chat_message(chat_message: ChatMessage):
         session.commit()
         session.refresh(chat_message)
 
-def select_all_chat_sessions_for_userid(userId: str):
+def select_all_chat_sessions_for_userid(userId: UUID):
     statement = select(ChatSession).where(
             ChatSession.user_id == userId
+        )
+    with Session(session_engine) as session:
+        return session.exec(statement).all()
+
+def find_user_by_id(user_id: UUID):
+    statement = select(ChatMessage).where(
+            User.id == user_id
         )
     with Session(session_engine) as session:
         return session.exec(statement).all()
@@ -44,3 +55,37 @@ def select_all_chat_messages_for_session_id(session_id: str):
     )
     with Session(session_engine) as session:
         return session.exec(statement).all()
+
+def increase_session_size(session_id: UUID, size: int):
+    with Session(session_engine) as session:
+        chat_session = session.get(ChatSession, session_id)
+        if chat_session:
+            chat_session.session_size_after_compaction += size
+            chat_session.session_size_before_compaction += size
+            session.add(chat_session)
+            session.commit()
+            session.refresh(chat_session)
+
+def get_session_size(session_id: UUID):
+    with Session(session_engine) as session:
+        chat_session = session.get(ChatSession, session_id)
+        if chat_session:
+            return chat_session.session_size_after_compaction
+        return 0
+def insert_compaction_result(result: CompactionResult):
+    # if there is existing compaction result for the session, then update it with new result and size and timestamp
+    existing_result = None
+    with Session(session_engine) as session:
+        existing_result = session.exec(select(CompactionResult).where(CompactionResult.session_id == result.session_id)).first()
+        if existing_result:
+            existing_result.compaction_result = result.compaction_result
+            existing_result.size = result.size
+            existing_result.created_at = result.created_at
+            session.add(existing_result)
+            session.commit()
+            session.refresh(existing_result)
+            return existing_result
+        session.add(result)
+        session.commit()
+        session.refresh(result)
+        return result
