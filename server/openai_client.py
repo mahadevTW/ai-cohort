@@ -1,3 +1,5 @@
+import os
+from database.models import ChatMessage
 import httpx
 def openai_chat(message:str, session_id: str, history: list[dict] = None) -> str:
     # make api call to open ai api and generate response and give it back to the user
@@ -22,14 +24,19 @@ def openai_chat(message:str, session_id: str, history: list[dict] = None) -> str
             {
             "role": "user",
             "content": message
-            }
-            
-        ]
+        }
+    ]
+    
+    request_body = {
+        "model": "gpt-5-mini",
+        "messages": messages,
     }
     response = httpx.post("https://api.openai.com/v1/chat/completions",
                           headers={"Authorization": f"Bearer {OPENAI_KEY}", "Content-Type": "application/json"},
                           json=request_body, timeout=30)
     if response.status_code == 200:
+        # print number of tokens being used for input and output
+        print(f"Input tokens: {response.json()['usage']['prompt_tokens']}, Output tokens: {response.json()['usage']['completion_tokens']}")
         return response.json()["choices"][0]["message"]["content"]
     else:
         return f"Error: {response.status_code} - {response.text}"
