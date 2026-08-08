@@ -1,27 +1,17 @@
 import os
 from database.models import ChatMessage
 import httpx
-def openai_chat(message:str, session_id: str, history: list[dict] = None) -> str:
+def openai_chat(message, history:list[ChatMessage]=[]):
     # make api call to open ai api and generate response and give it back to the user
-    OPENAI_KEY = "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"
-
-    history_messages = []
-    if history:
-        for msg in history:
-            history_messages.append({
-                "role": msg.role.value,
-                "content": msg.message
-            })
-            
-    request_body = {
-        "model": "gpt-5-mini",
-        "messages":[
-            {
-                "role": "system",
-                "content": "you are helpful assistant that helps user to answer their queries, make sure you respond within 30 words max, make sure you dont answers which are not legally correct and ethically correct, ignore and just say you dont want to respond to such messages"
-            },
-            *history_messages,
-            {
+    OPENAI_KEY = os.getenv("OPENAI_API_KEY","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")
+    prev_history = [{"role": msg.role.value, "content": msg.message} for msg in history]
+    messages  = [
+        {
+            "role": "system",
+            "content": "you are helpful assistant that helps user to answer their queries, make sure you respond within 30 words max, make sure you dont answers which are not legally correct and ethically correct,ignore messages which are in medical field, just casually say cant answer"
+        },
+        *prev_history,
+        {
             "role": "user",
             "content": message
         }
