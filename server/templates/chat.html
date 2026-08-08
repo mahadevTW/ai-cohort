@@ -3,137 +3,506 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Chat Assistant</title>
+    <title>AI Chat</title>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            background: #212121;
+            color: #ececec;
+            display: flex;
+            height: 100vh;
+            overflow: hidden;
+        }
+
+        /* ── Sidebar ── */
+        #sidebar {
+            width: 260px;
+            min-width: 260px;
+            background: #171717;
+            display: flex;
+            flex-direction: column;
+            height: 100vh;
+        }
+
+        #sidebar-header {
+            padding: 16px 12px 8px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-bottom: 1px solid #2a2a2a;
+        }
+
+        #sidebar-header span {
+            font-size: 15px;
+            font-weight: 600;
+            color: #ececec;
+        }
+
+        #new-chat-btn {
+            background: #2f2f2f;
+            border: none;
+            color: #ececec;
+            padding: 6px 12px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 13px;
+            transition: background 0.2s;
+        }
+        #new-chat-btn:hover { background: #3a3a3a; }
+
+        #sessionsList {
+            flex: 1;
+            overflow-y: auto;
+            padding: 8px 6px;
+            display: flex;
+            flex-direction: column;
+            gap: 2px;
+        }
+        #sessionsList::-webkit-scrollbar { width: 4px; }
+        #sessionsList::-webkit-scrollbar-thumb { background: #3a3a3a; border-radius: 4px; }
+
+        .session-item {
+            padding: 10px 12px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 13px;
+            color: #c5c5c5;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            transition: background 0.15s;
+            border: none;
+        }
+        .session-item:hover { background: #2a2a2a; color: #ececec; }
+        .session-item.active { background: #2f2f2f; color: #fff; }
+
+        /* ── Main chat area ── */
+        #main {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            height: 100vh;
+            background: #212121;
+        }
+
+        #chat-header {
+            padding: 16px 24px;
+            font-size: 16px;
+            font-weight: 600;
+            color: #ececec;
+            border-bottom: 1px solid #2a2a2a;
+            text-align: center;
+        }
+
+        #chatBox {
+            flex: 1;
+            overflow-y: auto;
+            padding: 24px 0;
+            display: flex;
+            flex-direction: column;
+            gap: 0;
+        }
+        #chatBox::-webkit-scrollbar { width: 6px; }
+        #chatBox::-webkit-scrollbar-thumb { background: #3a3a3a; border-radius: 4px; }
+
+        .msg-row {
+            display: flex;
+            padding: 12px 24px;
+            max-width: 800px;
+            width: 100%;
+            margin: 0 auto;
+            gap: 16px;
+            align-items: flex-start;
+        }
+        .msg-row.user-row {
+            flex-direction: row-reverse;
+            justify-content: flex-start;
+        }
+        .msg-row.user-row .msg-text {
+            flex: none;
+            max-width: 65%;
+            background: #2f2f2f;
+            padding: 10px 14px;
+            border-radius: 14px 14px 4px 14px;
+        }
+
+        .msg-avatar {
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 13px;
+            font-weight: bold;
+            flex-shrink: 0;
+        }
+        .avatar-user { background: #19c37d; color: #fff; }
+        .avatar-ai   { background: #ab68ff; color: #fff; }
+
+        .msg-text {
+            flex: 1;
+            font-size: 15px;
+            line-height: 1.65;
+            color: #ececec;
+            white-space: pre-wrap;
+            word-break: break-word;
+            padding-top: 4px;
+        }
+
+        /* ── Input bar ── */
+        #input-area {
+            padding: 16px 24px 24px;
+            background: #212121;
+        }
+
+        #input-wrap {
+            max-width: 800px;
+            margin: 0 auto;
+            display: flex;
+            align-items: center;
+            background: #2f2f2f;
+            border: 1px solid #3a3a3a;
+            border-radius: 14px;
+            padding: 6px 6px 6px 16px;
+            gap: 8px;
+        }
+        #input-wrap:focus-within { border-color: #555; }
+
+        #messageInput {
+            flex: 1;
+            background: transparent;
+            border: none;
+            outline: none;
+            color: #ececec;
+            font-size: 15px;
+            padding: 6px 0;
+            resize: none;
+        }
+        #messageInput::placeholder { color: #666; }
+
+        #send-btn {
+            background: #19c37d;
+            border: none;
+            border-radius: 10px;
+            width: 36px;
+            height: 36px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            flex-shrink: 0;
+            transition: background 0.2s;
+        }
+        #send-btn:hover { background: #15a86a; }
+        #send-btn svg { fill: #fff; width: 18px; height: 18px; }
+
+        #empty-state {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            color: #555;
+            font-size: 15px;
+            gap: 8px;
+        }
+        #empty-state .big { font-size: 28px; font-weight: 700; color: #3a3a3a; }
+
+        /* ── User ID Modal ── */
+        #userid-modal {
+            position: fixed;
+            inset: 0;
+            background: rgba(0,0,0,0.75);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 999;
+        }
+        #userid-modal.hidden { display: none; }
+        #userid-box {
+            background: #2f2f2f;
+            border: 1px solid #3a3a3a;
+            border-radius: 16px;
+            padding: 36px 32px;
+            width: 380px;
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+        }
+        #userid-box h2 { font-size: 20px; font-weight: 700; color: #ececec; text-align: center; }
+        #userid-box p  { font-size: 13px; color: #888; text-align: center; }
+        #userid-input {
+            background: #212121;
+            border: 1px solid #3a3a3a;
+            border-radius: 10px;
+            color: #ececec;
+            font-size: 14px;
+            padding: 12px 14px;
+            outline: none;
+            width: 100%;
+        }
+        #userid-input:focus { border-color: #555; }
+        #userid-submit {
+            background: #19c37d;
+            border: none;
+            border-radius: 10px;
+            color: #fff;
+            font-size: 15px;
+            font-weight: 600;
+            padding: 12px;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+        #userid-submit:hover { background: #15a86a; }
+        #userid-error { color: #e55; font-size: 13px; text-align: center; display: none; }
+    </style>
 </head>
-<body style="margin:0;background:#f4f6f9;font-family:Arial,Helvetica,sans-serif;display:flex;justify-content:center;align-items:center;height:100vh;">
+<body>
 
-<div style="width:420px;height:700px;background:#fff;border-radius:12px;box-shadow:0 4px 15px rgba(0,0,0,.15);display:flex;flex-direction:column;overflow:hidden;">
-
-    <!-- Header -->
-    <div style="background:#2563eb;color:#fff;padding:16px;font-size:20px;font-weight:bold;text-align:center;">
-        AI Chat
+<!-- User ID Modal -->
+<div id="userid-modal">
+    <div id="userid-box">
+        <h2>Welcome to AI Chat</h2>
+        <p>Enter your User ID to continue</p>
+        <input id="userid-input" type="text" placeholder="Paste your User ID..." onkeypress="if(event.key==='Enter') submitUserId();" />
+        <div id="userid-error">Please enter a valid User ID.</div>
+        <button id="userid-submit" onclick="submitUserId()">Continue</button>
     </div>
+</div>
 
-    <!-- Chat Area -->
-    <div id="chatBox"
-         style="flex:1;padding:16px;overflow-y:auto;background:#f8fafc;display:flex;flex-direction:column;gap:12px;">
+<!-- Sidebar -->
+<div id="sidebar">
+    <div id="sidebar-header">
+        <span>AI Chat</span>
+        <button id="new-chat-btn" onclick="newChat()">+ New chat</button>
+    </div>
+    <div id="sessionsList">
+        <div style="padding:16px;color:#555;font-size:13px;text-align:center;">Loading...</div>
+    </div>
+</div>
 
-        <div style="text-align:center;color:#888;font-size:13px;">
-            Start chatting...
+<!-- Main -->
+<div id="main">
+    <div id="chatBox">
+        <div id="empty-state">
+            <div class="big">AI Chat</div>
+            <div>Start a new conversation</div>
         </div>
-
     </div>
 
-    <!-- Input -->
-    <div style="display:flex;padding:12px;border-top:1px solid #ddd;background:#fff;">
-        <input
-            id="messageInput"
-            type="text"
-            placeholder="Type your message..."
-            style="flex:1;padding:10px;border:1px solid #ccc;border-radius:8px;outline:none;font-size:15px;"
-            onkeypress="if(event.key==='Enter'){sendMessage();}"
-        />
-        <button
-            onclick="sendMessage()"
-            style="margin-left:10px;padding:10px 18px;border:none;border-radius:8px;background:#2563eb;color:white;cursor:pointer;font-weight:bold;">
-            Send
-        </button>
+    <div id="input-area">
+        <div id="input-wrap">
+            <input
+                id="messageInput"
+                type="text"
+                placeholder="Message AI Chat..."
+                onkeypress="if(event.key==='Enter'){sendMessage();}"
+            />
+            <button id="send-btn" onclick="sendMessage()">
+                <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                    <path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/>
+                </svg>
+            </button>
+        </div>
     </div>
-
 </div>
 
 <script>
 const API_URL = "/chat";
+let USER_ID = null;
+let currentSessionId = null;
+
+async function submitUserId() {
+    const input = document.getElementById("userid-input").value.trim();
+    const errorEl = document.getElementById("userid-error");
+    const btn = document.getElementById("userid-submit");
+
+    if (!input) {
+        errorEl.innerText = "Please enter a User ID.";
+        errorEl.style.display = "block";
+        return;
+    }
+
+    btn.disabled = true;
+    btn.innerText = "Verifying...";
+    errorEl.style.display = "none";
+
+    try {
+        const res = await fetch(`/sessions?user_id=${encodeURIComponent(input)}`, {
+            headers: { "accept": "application/json" }
+        });
+
+        if (!res.ok) {
+            throw new Error("Invalid User ID or server error.");
+        }
+
+        const data = await res.json();
+        USER_ID = input;
+        document.getElementById("userid-modal").classList.add("hidden");
+        renderSessions(data.sessions || []);
+
+    } catch (err) {
+        errorEl.innerText = "Invalid User ID. Please try again.";
+        errorEl.style.display = "block";
+    } finally {
+        btn.disabled = false;
+        btn.innerText = "Continue";
+    }
+}
+
+function clearEmptyState() {
+    const es = document.getElementById("empty-state");
+    if (es) es.remove();
+}
 
 function addMessage(text, isUser) {
+    clearEmptyState();
     const chatBox = document.getElementById("chatBox");
 
-    // Remove placeholder
-    if (chatBox.children.length === 1 &&
-        chatBox.firstElementChild.innerText === "Start chatting...") {
-        chatBox.innerHTML = "";
-    }
-
     const row = document.createElement("div");
-    row.style.display = "flex";
-    row.style.justifyContent = isUser ? "flex-end" : "flex-start";
+    row.className = "msg-row" + (isUser ? " user-row" : "");
 
-    const bubble = document.createElement("div");
-    bubble.innerText = text;
-    bubble.style.maxWidth = "75%";
-    bubble.style.padding = "10px 14px";
-    bubble.style.borderRadius = "14px";
-    bubble.style.whiteSpace = "pre-wrap";
-    bubble.style.wordBreak = "break-word";
-    bubble.style.fontSize = "15px";
+    const avatar = document.createElement("div");
+    avatar.className = "msg-avatar " + (isUser ? "avatar-user" : "avatar-ai");
+    avatar.innerText = isUser ? "U" : "AI";
 
-    if (isUser) {
-        bubble.style.background = "#2563eb";
-        bubble.style.color = "white";
-        bubble.style.borderBottomRightRadius = "4px";
-    } else {
-        bubble.style.background = "#e5e7eb";
-        bubble.style.color = "#111";
-        bubble.style.borderBottomLeftRadius = "4px";
-    }
+    const msgText = document.createElement("div");
+    msgText.className = "msg-text";
+    msgText.innerText = text;
 
-    row.appendChild(bubble);
+    row.appendChild(avatar);
+    row.appendChild(msgText);
+
     chatBox.appendChild(row);
     chatBox.scrollTop = chatBox.scrollHeight;
+}
+
+function newChat() {
+    currentSessionId = null;
+    const chatBox = document.getElementById("chatBox");
+    chatBox.innerHTML = '<div id="empty-state"><div class="big">AI Chat</div><div>Start a new conversation</div></div>';
+    document.getElementById("messageInput").focus();
+    highlightActiveSession();
+}
+
+async function loadSession(sessionId, title) {
+    currentSessionId = sessionId;
+    highlightActiveSession();
+
+    const chatBox = document.getElementById("chatBox");
+    chatBox.innerHTML = '<div style="flex:1;display:flex;align-items:center;justify-content:center;color:#555;font-size:14px;">Loading...</div>';
+
+    try {
+        const res = await fetch(`/messages?session_id=${sessionId}`, { headers: { "accept": "application/json" } });
+        const data = await res.json();
+        chatBox.innerHTML = "";
+        if (!data.messages || data.messages.length === 0) {
+            chatBox.innerHTML = '<div style="flex:1;display:flex;align-items:center;justify-content:center;color:#555;font-size:14px;">No messages yet.</div>';
+            return;
+        }
+        data.messages.forEach(m => addMessage(m.message, m.role === "user"));
+    } catch (err) {
+        chatBox.innerHTML = '<div style="flex:1;display:flex;align-items:center;justify-content:center;color:#e55;font-size:14px;">Failed to load messages.</div>';
+        console.error(err);
+    }
+}
+
+function highlightActiveSession() {
+    document.querySelectorAll(".session-item").forEach(el => {
+        el.classList.toggle("active", el.dataset.id === currentSessionId);
+    });
+}
+
+function renderSessions(sessions) {
+    const sessionsList = document.getElementById("sessionsList");
+    sessionsList.innerHTML = "";
+
+    if (!sessions || sessions.length === 0) {
+        sessionsList.innerHTML = '<div style="padding:16px;color:#555;font-size:13px;text-align:center;">No sessions yet.</div>';
+        return;
+    }
+
+    sessions.forEach(session => {
+        const item = document.createElement("div");
+        item.className = "session-item";
+        item.dataset.id = session.id;
+        item.title = session.session_title || "Untitled";
+        item.innerText = session.session_title || "Untitled";
+        item.onclick = () => loadSession(session.id, session.session_title);
+        sessionsList.appendChild(item);
+    });
+
+    highlightActiveSession();
+}
+
+async function loadSessions() {
+    try {
+        const res = await fetch(`/sessions?user_id=${USER_ID}`, { headers: { "accept": "application/json" } });
+        const data = await res.json();
+        renderSessions(data.sessions || []);
+    } catch (err) {
+        document.getElementById("sessionsList").innerHTML =
+            '<div style="padding:16px;color:#e55;font-size:13px;text-align:center;">Failed to load sessions.</div>';
+        console.error(err);
+    }
 }
 
 async function sendMessage() {
     const input = document.getElementById("messageInput");
     const message = input.value.trim();
-
     if (!message) return;
 
     addMessage(message, true);
     input.value = "";
 
-    // Typing indicator
+    clearEmptyState();
     const chatBox = document.getElementById("chatBox");
-
     const typingRow = document.createElement("div");
-    typingRow.style.display = "flex";
-    typingRow.style.justifyContent = "flex-start";
+    typingRow.className = "msg-row ai-row";
 
-    const typingBubble = document.createElement("div");
-    typingBubble.innerText = "Typing...";
-    typingBubble.style.background = "#e5e7eb";
-    typingBubble.style.padding = "10px 14px";
-    typingBubble.style.borderRadius = "14px";
-    typingBubble.style.borderBottomLeftRadius = "4px";
+    const avatar = document.createElement("div");
+    avatar.className = "msg-avatar avatar-ai";
+    avatar.innerText = "AI";
 
-    typingRow.appendChild(typingBubble);
+    const typingText = document.createElement("div");
+    typingText.className = "msg-text";
+    typingText.style.color = "#666";
+    typingText.innerText = "Thinking...";
+
+    typingRow.appendChild(avatar);
+    typingRow.appendChild(typingText);
     chatBox.appendChild(typingRow);
     chatBox.scrollTop = chatBox.scrollHeight;
 
     try {
-        const response = await fetch(
-            API_URL + "?message=" + encodeURIComponent(message),
-            {
-                method: "POST",
-                headers: {
-                    "accept": "application/json"
-                }
-            }
-        );
+        let url = `${API_URL}?message=${encodeURIComponent(message)}&user_id=${USER_ID}`;
+        if (currentSessionId) url += `&session_id=${currentSessionId}`;
+
+        const response = await fetch(url, {
+            method: "POST",
+            headers: { "accept": "application/json" }
+        });
 
         const data = await response.json();
-
         chatBox.removeChild(typingRow);
-
         addMessage(data.response || "No response received.", false);
 
+        if (data.session_id && !currentSessionId) {
+            currentSessionId = data.session_id;
+            await loadSessions();
+        }
+
     } catch (err) {
-
         chatBox.removeChild(typingRow);
-
         addMessage("Failed to connect to server.", false);
         console.error(err);
     }
 }
+
+// Sessions are loaded after user ID is confirmed (see above)
 </script>
 
 </body>

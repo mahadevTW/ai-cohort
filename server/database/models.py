@@ -25,6 +25,8 @@ class ChatSession(SQLModel, table=True):
     )
     user_id: UUID = Field(foreign_key="user.id")
     session_title: str
+    size_before_compaction: Optional[int] = None
+    size_after_compaction: Optional[int] = None
     created_at: datetime = Field(default_factory=datetime.now)
     
 class ChatMessage(SQLModel, table=True):
@@ -35,6 +37,10 @@ class ChatMessage(SQLModel, table=True):
     )
     message: str
     session_id: UUID = Field(foreign_key="chat_session.id")
+    size_of_message: Optional[int] = None
     role: MessageRole
     created_at: datetime = Field(default_factory=datetime.now)
+
+
+
     
