@@ -2,11 +2,7 @@ import uuid
 
 from sqlmodel import SQLModel, create_engine
 
-<<<<<<< HEAD
 from database import repository
-=======
-import database.db as repository
->>>>>>> d0c7f253004254766f9d8921b7a623a2a0430eae
 from database.models import User, ChatSession, ChatMessage, MessageRole
 
 
