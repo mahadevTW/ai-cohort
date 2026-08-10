@@ -2,10 +2,10 @@ import os
 from typing import Optional
 from uuid import UUID
 
-from database.models import ChatMessage, ChatSession, User
+from database.models import ChatCompaction, ChatMessage, ChatSession, User
 from fastapi import FastAPI, HTTPException, Request
-from database.db import create_db_and_tables, insert_chat_message, insert_chat_session, insert_user, select_all_chat_messages_for_session_id, select_all_chat_sessions_for_userid, select_chat_session_by_id, select_user_by_id
-from openai_client import openai_chat
+from database.db import create_db_and_tables, insert_chat_compaction, insert_chat_message, insert_chat_session, insert_user, recalculate_chat_session_sizes, select_all_chat_messages_for_session_id, select_all_chat_sessions_for_userid, select_chat_session_by_id, select_user_by_id
+from openai_client import compact_messages, openai_chat
 import uvicorn
 from fastapi.templating import Jinja2Templates
 
@@ -67,6 +67,26 @@ def get_session_messages(session_id: UUID, user_id: UUID):
         for message in messages
     ]
 
+@app.post("/compact")
+#use compact_messages from open_ai_client to compact messages for a given session_id
+def compact_chat_messages(session_id: UUID):
+    chat_session = select_chat_session_by_id(session_id)
+    if not chat_session:
+        raise HTTPException(status_code=404, detail="Chat session not found")
+
+    messages = select_all_chat_messages_for_session_id(session_id)
+    if not messages:
+        raise HTTPException(status_code=404, detail="No messages found for this session")
+
+    compacted_message = compact_messages(messages)
+    compaction_record = insert_chat_compaction(
+        ChatCompaction(
+            session_id=chat_session.id,
+            compacted_message=compacted_message,
+        )
+    )
+
+    return {"compacted_message": compacted_message, "compaction_id": str(compaction_record.id)}
 
 @app.post("/chat")
 def chat_endpoint(message: Optional[str] = None, user_id: Optional[str] = None, session_id: Optional[str] = None, chat_title: Optional[str] = None):
@@ -98,8 +118,9 @@ def chat_endpoint(message: Optional[str] = None, user_id: Optional[str] = None, 
         if not message or not message.strip():
             return {"session_id": session.id}
         response = openai_chat(message)
-        insert_chat_message(chat_message=ChatMessage(message=message, role="user", session_id=session.id, user_id=session.user_id))
-        insert_chat_message(chat_message=ChatMessage(message=response, role="assistant", session_id=session.id, user_id=session.user_id))
+        insert_chat_message(chat_message=ChatMessage(message=message, role="user", session_id=session.id, user_id=session.user_id, size=len(message)))
+        insert_chat_message(chat_message=ChatMessage(message=response, role="assistant", session_id=session.id, user_id=session.user_id, size=len(response)))
+        recalculate_chat_session_sizes(session.id)
         return {"response": response, "session_id": session.id}
     if not message or not message.strip():
         raise HTTPException(status_code=400, detail="message is required for an existing chat session")
@@ -110,8 +131,9 @@ def chat_endpoint(message: Optional[str] = None, user_id: Optional[str] = None, 
     messages = select_all_chat_messages_for_session_id(session_id=sid)
     response = openai_chat(message, history=messages)
     # save original message into db and save chat response into db
-    insert_chat_message(chat_message=ChatMessage(message=message, role="user", session_id=sid, user_id=chat_session.user_id))
-    insert_chat_message(chat_message=ChatMessage(message=response, role="assistant", session_id=sid, user_id=chat_session.user_id))
+    insert_chat_message(chat_message=ChatMessage(message=message, role="user", session_id=sid, user_id=chat_session.user_id,size=len(message)))
+    insert_chat_message(chat_message=ChatMessage(message=response, role="assistant", session_id=sid, user_id=chat_session.user_id, size=len(response)))
+    recalculate_chat_session_sizes(sid)
     return {"response": response, "session_id": session_id}
     # make api call to some model provider and generate response and give it back to the user
 

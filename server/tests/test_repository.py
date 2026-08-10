@@ -4,7 +4,7 @@ import httpx
 from sqlmodel import SQLModel, create_engine
 
 import database.db as repository
-from database.models import User, ChatSession, ChatMessage, MessageRole
+from database.models import User, ChatSession, ChatMessage, MessageRole, ChatCompaction
 from openai_client import openai_chat
 
 
@@ -178,3 +178,149 @@ def test_multiple_messages():
     assert len(messages) == 2
     assert messages[0].role == MessageRole.USER
     assert messages[1].role == MessageRole.ASSISTANT
+
+
+def test_recalculate_chat_session_sizes_from_messages():
+    user = User(id=uuid.uuid4(), name="Accounting User")
+    repository.insert_user(user)
+
+    session = ChatSession(id=uuid.uuid4(), user_id=user.id, session_title="Size check")
+    repository.insert_chat_session(session)
+
+    repository.insert_chat_message(
+        ChatMessage(
+            id=uuid.uuid4(),
+            session_id=session.id,
+            user_id=user.id,
+            role=MessageRole.USER,
+            message="Hi",
+            size=2,
+        )
+    )
+
+    repository.insert_chat_message(
+        ChatMessage(
+            id=uuid.uuid4(),
+            session_id=session.id,
+            user_id=user.id,
+            role=MessageRole.ASSISTANT,
+            message="Hello!",
+            size=6,
+        )
+    )
+
+    repository.recalculate_chat_session_sizes(session.id)
+
+    refreshed = repository.select_chat_session_by_id(session.id)
+
+    assert refreshed is not None
+    assert refreshed.size_before_compaction == 8
+    assert refreshed.size_after_compaction == 8
+
+
+def test_insert_chat_compaction():
+    user = User(id=uuid.uuid4(), name="Compaction Tester")
+    repository.insert_user(user)
+
+    session = ChatSession(id=uuid.uuid4(), user_id=user.id, session_title="Compact")
+    repository.insert_chat_session(session)
+
+    row = repository.insert_chat_compaction(
+        ChatCompaction(
+            id=uuid.uuid4(),
+            session_id=session.id,
+            compacted_message="Compacted summary",
+        )
+    )
+
+    assert row is not None
+    assert row.session_id == session.id
+    assert row.compacted_message == "Compacted summary"
+
+
+def test_insert_chat_compaction_updates_existing_row():
+    user = User(id=uuid.uuid4(), name="Compaction Upsert User")
+    repository.insert_user(user)
+
+    session = ChatSession(id=uuid.uuid4(), user_id=user.id, session_title="Upsert")
+    repository.insert_chat_session(session)
+
+    first = repository.insert_chat_compaction(
+        ChatCompaction(
+            id=uuid.uuid4(),
+            session_id=session.id,
+            compacted_message="Initial compacted summary",
+        )
+    )
+    first_timestamp = first.created_at
+
+    second = repository.insert_chat_compaction(
+        ChatCompaction(
+            id=uuid.uuid4(),
+            session_id=session.id,
+            compacted_message="Updated compacted summary",
+        )
+    )
+
+    with repository.Session(repository.session_engine) as db_session:
+        rows = db_session.exec(
+            repository.select(ChatCompaction).where(ChatCompaction.session_id == session.id)
+        ).all()
+
+    assert len(rows) == 1
+    assert rows[0].id == first.id
+    assert rows[0].compacted_message == "Updated compacted summary"
+    assert rows[0].created_at != first_timestamp
+    assert rows[0].created_at == second.created_at
+
+
+def test_create_db_and_tables_adds_missing_columns(tmp_path):
+    db_path = tmp_path / "database.db"
+    engine = create_engine(f"sqlite:///{db_path.as_posix()}")
+
+    with engine.begin() as conn:
+        conn.exec_driver_sql(
+            """
+            CREATE TABLE users (
+                id TEXT PRIMARY KEY,
+                name TEXT NOT NULL
+            )
+            """
+        )
+        conn.exec_driver_sql(
+            """
+            CREATE TABLE chat_sessions (
+                id TEXT PRIMARY KEY,
+                title TEXT NOT NULL,
+                created_at DATETIME,
+                last_modified_at DATETIME,
+                user_id TEXT NOT NULL
+            )
+            """
+        )
+        conn.exec_driver_sql(
+            """
+            CREATE TABLE chat_messages (
+                id TEXT PRIMARY KEY,
+                text TEXT NOT NULL,
+                timestamp DATETIME NOT NULL,
+                role TEXT NOT NULL,
+                session_id TEXT NOT NULL,
+                user_id TEXT NOT NULL
+            )
+            """
+        )
+
+    repository.session_engine = engine
+    repository.create_db_and_tables()
+
+    with engine.connect() as conn:
+        chat_session_cols = conn.exec_driver_sql("PRAGMA table_info(chat_sessions)").fetchall()
+        chat_message_cols = conn.exec_driver_sql("PRAGMA table_info(chat_messages)").fetchall()
+
+    session_names = {row[1] for row in chat_session_cols}
+    message_names = {row[1] for row in chat_message_cols}
+
+    assert "size_before_compaction" in session_names
+    assert "size_after_compaction" in session_names
+    assert "size" in message_names

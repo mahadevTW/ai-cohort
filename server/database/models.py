@@ -3,7 +3,7 @@ from enum import Enum
 from typing import List, Optional
 from uuid import UUID, uuid4
 
-from sqlalchemy import Column, DateTime, String
+from sqlalchemy import Column, DateTime, Integer, String
 from sqlmodel import SQLModel, Field, Relationship
 
 
@@ -39,6 +39,8 @@ class ChatSession(SQLModel, table=True):
     last_modified_at: datetime = Field(default_factory=datetime.utcnow)
 
     user_id: UUID = Field(foreign_key="users.id")
+    size_before_compaction: Optional[int] = Field(default=None, sa_column=Column("size_before_compaction", Integer, nullable=True))
+    size_after_compaction: Optional[int] = Field(default=None, sa_column=Column("size_after_compaction", Integer, nullable=True))
 
 
 # -----------------------
@@ -54,3 +56,13 @@ class ChatMessage(SQLModel, table=True):
     role: MessageRole
     session_id: UUID = Field(foreign_key="chat_sessions.id")
     user_id: UUID = Field(foreign_key="users.id")
+    size: Optional[int] = Field(default=None, sa_column=Column("size", Integer, nullable=True))
+
+class ChatCompaction(SQLModel, table=True):
+    __tablename__ = "chat_compactions"
+    id: UUID = Field(default_factory=uuid4, primary_key=True)
+    session_id: UUID = Field(foreign_key="chat_sessions.id")
+    compacted_message: str = Field(sa_column=Column("compacted_text", String, nullable=False))
+    created_at: datetime = Field(
+        sa_column=Column("timestamp", DateTime, nullable=False, default=datetime.utcnow)
+    )
