@@ -1,6 +1,11 @@
 import os
+import sys
 from typing import Optional
 from uuid import UUID
+
+SERVER_DIR = os.path.dirname(os.path.abspath(__file__))
+if SERVER_DIR not in sys.path:
+    sys.path.insert(0, SERVER_DIR)
 
 from database.models import ChatCompaction, ChatMessage, ChatSession, User
 from fastapi import FastAPI, HTTPException, Request
@@ -85,8 +90,14 @@ def compact_chat_messages(session_id: UUID):
             compacted_message=compacted_message,
         )
     )
+    total_size = recalculate_chat_session_sizes(session_id)
 
-    return {"compacted_message": compacted_message, "compaction_id": str(compaction_record.id)}
+    return {
+        "compacted_message": compacted_message,
+        "total_size": total_size,
+        "compaction_id": str(compaction_record.id),
+        "session_id": str(session_id),
+    }
 
 @app.post("/chat")
 def chat_endpoint(message: Optional[str] = None, user_id: Optional[str] = None, session_id: Optional[str] = None, chat_title: Optional[str] = None):
@@ -120,7 +131,12 @@ def chat_endpoint(message: Optional[str] = None, user_id: Optional[str] = None, 
         response = openai_chat(message)
         insert_chat_message(chat_message=ChatMessage(message=message, role="user", session_id=session.id, user_id=session.user_id, size=len(message)))
         insert_chat_message(chat_message=ChatMessage(message=response, role="assistant", session_id=session.id, user_id=session.user_id, size=len(response)))
-        recalculate_chat_session_sizes(session.id)
+        session_size = recalculate_chat_session_sizes(session.id)
+        if session_size > 1000:
+            return {
+                "response": "Chat session size exceeds limit. Please compress the chat",
+                "session_id": session.id,
+            }
         return {"response": response, "session_id": session.id}
     if not message or not message.strip():
         raise HTTPException(status_code=400, detail="message is required for an existing chat session")
@@ -133,7 +149,12 @@ def chat_endpoint(message: Optional[str] = None, user_id: Optional[str] = None, 
     # save original message into db and save chat response into db
     insert_chat_message(chat_message=ChatMessage(message=message, role="user", session_id=sid, user_id=chat_session.user_id,size=len(message)))
     insert_chat_message(chat_message=ChatMessage(message=response, role="assistant", session_id=sid, user_id=chat_session.user_id, size=len(response)))
-    recalculate_chat_session_sizes(sid)
+    session_size = recalculate_chat_session_sizes(sid)
+    if session_size > 1000:
+        return {
+            "response": "Chat session size exceeds limit. Please compress the chat",
+            "session_id": sid,
+        }
     return {"response": response, "session_id": session_id}
     # make api call to some model provider and generate response and give it back to the user
 

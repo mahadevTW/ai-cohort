@@ -96,6 +96,106 @@ function enableChatInterface() {
     loadChatHistory();
 }
 
+function disableChatInterface(limitMessage) {
+    const messageInput = document.getElementById("messageInput");
+    const sendButton = document.getElementById("sendButton");
+
+    messageInput.disabled = true;
+    messageInput.placeholder = limitMessage;
+    sendButton.disabled = true;
+}
+
+function enableChatInput() {
+    const messageInput = document.getElementById("messageInput");
+    const sendButton = document.getElementById("sendButton");
+
+    messageInput.disabled = false;
+    messageInput.placeholder = "Type your message...";
+    sendButton.disabled = false;
+}
+
+function renderLimitPrompt(totalSizeText) {
+    const chatBox = document.getElementById("chatBox");
+
+    const existingPrompt = document.getElementById("limitPromptRow");
+    if (existingPrompt && existingPrompt.parentNode) {
+        existingPrompt.parentNode.removeChild(existingPrompt);
+    }
+
+    if (chatBox.children.length === 1) {
+        const placeholderText = chatBox.firstElementChild.innerText;
+        if (placeholderText === "Start chatting..." ||
+            placeholderText === "No messages in this chat yet.") {
+            chatBox.innerHTML = "";
+        }
+    }
+
+    const row = document.createElement("div");
+    row.id = "limitPromptRow";
+    row.style.display = "flex";
+    row.style.justifyContent = "flex-start";
+
+    const bubble = document.createElement("div");
+    bubble.style.maxWidth = "75%";
+    bubble.style.padding = "10px 14px";
+    bubble.style.borderRadius = "14px";
+    bubble.style.whiteSpace = "pre-wrap";
+    bubble.style.wordBreak = "break-word";
+    bubble.style.fontSize = "15px";
+    bubble.style.background = "#e5e7eb";
+    bubble.style.color = "#111";
+    bubble.style.borderBottomLeftRadius = "4px";
+    bubble.innerHTML =
+        "Chat session size exceeds limit. Do you want to compress the chat or start new chat session? " +
+        "<a href=\"#\" id=\"compressChatLink\">compress</a> or " +
+        "<a href=\"#\" id=\"startNewChatLink\">start new chat session</a>" +
+        (totalSizeText ? "<div style=\"margin-top:8px;font-size:13px;color:#374151;\">Total size: " + totalSizeText + "</div>" : "");
+
+    row.appendChild(bubble);
+    chatBox.appendChild(row);
+    chatBox.scrollTop = chatBox.scrollHeight;
+
+    const compressLink = document.getElementById("compressChatLink");
+    const startNewChatLink = document.getElementById("startNewChatLink");
+
+    compressLink.onclick = async function(event) {
+        event.preventDefault();
+
+        try {
+            const response = await fetch(
+                "/compact?session_id=" + encodeURIComponent(sessionId),
+                { method: "POST", headers: { "accept": "application/json" } }
+            );
+            const data = await response.json();
+            if (!response.ok) {
+                throw new Error(data.detail || "Unable to compact chat.");
+            }
+
+            const latestTotalSize = data.total_size;
+
+            if (latestTotalSize <= 1000) {
+                const promptRow = document.getElementById("limitPromptRow");
+                if (promptRow && promptRow.parentNode) {
+                    promptRow.parentNode.removeChild(promptRow);
+                }
+                enableChatInput();
+                addMessage("Chat has been compressed. You can continue chatting.", false);
+            } else {
+                disableChatInterface("Chat session size exceeds limit. Please compress the chat");
+                renderLimitPrompt(latestTotalSize);
+            }
+        } catch (err) {
+            console.error(err);
+            addMessage("Failed to compact chat.", false);
+        }
+    };
+
+    startNewChatLink.onclick = function(event) {
+        event.preventDefault();
+        startNewChat();
+    };
+}
+
 async function loadChatHistory() {
     if (!userId) return;
 
@@ -382,13 +482,24 @@ async function sendMessage() {
 
         sessionId = data.session_id || sessionId;
 
-        chatBox.removeChild(typingRow);
+        if (typingRow.parentNode) {
+            chatBox.removeChild(typingRow);
+        }
 
-        addMessage(data.response || "No response received.", false);
+        const responseText = data.response || "No response received.";
+
+        if (responseText === "Chat session size exceeds limit. Please compress the chat") {
+            disableChatInterface("Chat session size exceeds limit. Do you want to compress the chat or start new chat session");
+            renderLimitPrompt();
+        } else {
+            addMessage(responseText, false);
+        }
 
     } catch (err) {
 
-        chatBox.removeChild(typingRow);
+        if (typingRow.parentNode) {
+            chatBox.removeChild(typingRow);
+        }
 
         addMessage("Failed to connect to server.", false);
         console.error(err);
