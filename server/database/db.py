@@ -135,12 +135,11 @@ def insert_chat_compaction(chat_compaction: ChatCompaction):
 
 
 def recalculate_chat_session_sizes(session_id: str):
-    """Refresh the session size counters from the current message payload.
+    """Refresh the session size counters from newly added message payload.
 
-    The caller is expected to insert one full user/assistant exchange at a time,
-    but the repository can also be asked to recompute the session totals from the
-    persisted message rows in the database. Both counters are intentionally set to
-    the same aggregate value with the current product requirement.
+    `size_before_compaction` tracks the last seen total for the session.
+    `size_after_compaction` accumulates only the newly added size since the
+    previous refresh.
     """
     with Session(session_engine) as session:
         total_size = session.exec(
@@ -153,12 +152,24 @@ def recalculate_chat_session_sizes(session_id: str):
 
         chat_session = session.get(ChatSession, session_id)
         if chat_session:
+            previous_total_size = chat_session.size_before_compaction or 0
+            new_size = max(total_size - previous_total_size, 0)
             chat_session.size_before_compaction = total_size
-            chat_session.size_after_compaction = total_size
+            existing_after_size = chat_session.size_after_compaction or 0
+            chat_session.size_after_compaction = existing_after_size + new_size
             session.add(chat_session)
             session.commit()
 
-        return total_size
+        return chat_session.size_after_compaction if chat_session else total_size
+
+def update_chat_session_sizes(session_id: str, size_before: int, size_after: int):
+    with Session(session_engine) as session:
+        chat_session = session.get(ChatSession, session_id)
+        if chat_session:
+            chat_session.size_before_compaction = size_before
+            chat_session.size_after_compaction = size_after
+            session.add(chat_session)
+            session.commit()
         
 def select_all_chat_messages_for_session_id  (session_id : str):
     with Session(session_engine) as session:
@@ -222,6 +233,16 @@ def update_chat_session_sizes(session_id: str, size_before: int, size_after: int
         chat_session = session.get(ChatSession, session_id)
         if chat_session:
             chat_session.size_before_compaction = size_before
+            chat_session.size_after_compaction = size_after
+            session.add(chat_session)
+            session.commit()
+
+
+def update_chat_session_size(session_id: str, size_after: int):
+    """Update only the post-compaction size for a chat session."""
+    with Session(session_engine) as session:
+        chat_session = session.get(ChatSession, session_id)
+        if chat_session:
             chat_session.size_after_compaction = size_after
             session.add(chat_session)
             session.commit()
