@@ -246,3 +246,25 @@ def update_chat_session_size(session_id: str, size_after: int):
             chat_session.size_after_compaction = size_after
             session.add(chat_session)
             session.commit()
+
+def select_latest_chat_compaction_for_session_id(session_id: UUID):
+    with Session(session_engine) as session:
+        statement = (
+            select(ChatCompaction)
+            .where(ChatCompaction.session_id == session_id)
+            .order_by(ChatCompaction.created_at.desc())
+        )
+        return session.exec(statement).first()
+
+
+def select_chat_messages_for_session_id_after(session_id: UUID, after: datetime):
+    with Session(session_engine) as session:
+        statement = (
+            select(ChatMessage)
+            .where(
+                ChatMessage.session_id == session_id,
+                ChatMessage.created_at > after,
+            )
+            .order_by(ChatMessage.created_at)
+        )
+        return session.exec(statement).all()
