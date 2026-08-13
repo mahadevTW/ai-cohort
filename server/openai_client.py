@@ -26,7 +26,7 @@ def compact_messages(messages: list[ChatMessage]) -> str:
         "messages": [
             {
                 "role": "system",
-                "content": "You are a helpful assistant that compacts chat messages into a single message. Ensure the compacted message is concise, clear, and retains the original meaning."
+                "content": "You are a helpful assistant that rewrite and condense the text/messages below. Reduce the total length by about 60%. Your goal is to keep the original meaning and preserve every single critical fact, decision, and piece of information without dropping anything vital. Use a tight, concise format like bullet points or short, dense paragraphs."
             },
             *chat_messages_payload,
         ]

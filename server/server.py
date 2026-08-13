@@ -9,7 +9,7 @@ if SERVER_DIR not in sys.path:
 
 from database.models import ChatCompaction, ChatMessage, ChatSession, User
 from fastapi import FastAPI, HTTPException, Request
-from database.db import create_db_and_tables, insert_chat_compaction, insert_chat_message, insert_chat_session, insert_user, recalculate_chat_session_sizes, select_all_chat_messages_for_session_id, select_all_chat_sessions_for_userid, select_chat_session_by_id, select_user_by_id
+from database.db import create_db_and_tables, insert_chat_compaction, insert_chat_message, insert_chat_session, insert_user, recalculate_chat_session_sizes, select_all_chat_messages_for_session_id, select_all_chat_sessions_for_userid, select_chat_session_by_id, select_user_by_id, update_chat_session_size
 from openai_client import compact_messages, openai_chat
 import uvicorn
 from fastapi.templating import Jinja2Templates
@@ -90,7 +90,8 @@ def compact_chat_messages(session_id: UUID):
             compacted_message=compacted_message,
         )
     )
-    total_size = recalculate_chat_session_sizes(session_id)
+    total_size = len(compacted_message)
+    update_chat_session_size(session_id, total_size)
 
     return {
         "compacted_message": compacted_message,
