@@ -43,6 +43,7 @@ def compact_messages(messages: list[ChatMessage]) -> str:
         raise RuntimeError(f"Error calling OpenAI API: {response.status_code} - {response.text}")
 
 def openai_chat(message, history=None, compacted_message: str | None = None):
+   print("Entered openai_chat() function with compacted message",compacted_message)
    if history is None:
         history = []
    prev_history = [{"role": msg.role, "content": msg.message} for msg in history]
