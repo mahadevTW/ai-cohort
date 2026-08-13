@@ -290,6 +290,31 @@
             display: none;
             line-height: 1.4;
         }
+
+        /* Session limit dialog */
+        #sessionLimitOverlay {
+            position: fixed;
+            inset: 0;
+            background: rgba(20, 23, 31, 0.72);
+            display: none;
+            align-items: center;
+            justify-content: center;
+            z-index: 60;
+        }
+        #sessionLimitCard {
+            background: var(--paper-card);
+            border-radius: 10px;
+            border-top: 4px solid var(--accent);
+            padding: 26px;
+            width: min(420px, calc(100vw - 32px));
+            box-shadow: 0 12px 30px rgba(0,0,0,.25);
+        }
+        #sessionLimitCard h2 { margin: 0 0 10px; font-size: 18px; }
+        #sessionLimitCard p { color: var(--ink-500); line-height: 1.5; margin: 0 0 18px; }
+        .limit-actions { display: flex; gap: 10px; justify-content: flex-end; }
+        .limit-actions button { padding: 10px 14px; border-radius: 6px; font-weight: 700; cursor: pointer; }
+        #newChatFromLimitBtn { border: 1px solid var(--grid-line); background: var(--paper-card); color: var(--ink-900); }
+        #compactSessionBtn { border: 0; background: var(--accent); color: var(--ink-900); }
     </style>
 </head>
 <body>
@@ -334,11 +359,23 @@
     </div>
 </div>
 
+<div id="sessionLimitOverlay" role="dialog" aria-modal="true" aria-labelledby="sessionLimitTitle">
+    <div id="sessionLimitCard">
+        <h2 id="sessionLimitTitle">This chat is full</h2>
+        <p id="sessionLimitMessage"></p>
+        <div class="limit-actions">
+            <button id="newChatFromLimitBtn" onclick="createNewChatFromLimit()">Create new chat</button>
+            <button id="compactSessionBtn" onclick="compactAndContinue()">Compact &amp; continue</button>
+        </div>
+    </div>
+</div>
+
 <script>
 const state = {
     userId: null,
     currentSessionId: null,
-    sessions: []
+    sessions: [],
+    pendingMessage: null
 };
 
 function setInputBarEnabled(enabled) {
@@ -502,15 +539,62 @@ function startNewChat() {
     document.getElementById("messageInput").focus();
 }
 
-async function sendMessage() {
+function showSessionLimitDialog(message) {
+    state.pendingMessage = message;
+    document.getElementById("sessionLimitMessage").innerText =
+        "This session has exceeded its context limit. Create a new chat, or compact this chat and continue with your message.";
+    document.getElementById("sessionLimitOverlay").style.display = "flex";
+}
+
+function hideSessionLimitDialog() {
+    document.getElementById("sessionLimitOverlay").style.display = "none";
+}
+
+async function createNewChatFromLimit() {
+    const message = state.pendingMessage;
+    state.pendingMessage = null;
+    hideSessionLimitDialog();
+    startNewChat();
+    if (message) await sendMessage(message);
+}
+
+async function compactAndContinue() {
+    const message = state.pendingMessage;
+    const sessionId = state.currentSessionId;
+    if (!message || !sessionId) return;
+
+    const compactButton = document.getElementById("compactSessionBtn");
+    compactButton.disabled = true;
+    compactButton.innerText = "Compacting...";
+    try {
+        const response = await fetch("/compact?session_id=" + encodeURIComponent(sessionId), {
+            method: "POST",
+            headers: { "accept": "application/json" }
+        });
+        if (!response.ok) throw new Error("Compaction failed: " + response.status);
+
+        state.pendingMessage = null;
+        hideSessionLimitDialog();
+        await sendMessage(message, true);
+    } catch (err) {
+        console.error(err);
+        document.getElementById("sessionLimitMessage").innerText =
+            "Compaction failed. Please try again or create a new chat.";
+    } finally {
+        compactButton.disabled = false;
+        compactButton.innerText = "Compact & continue";
+    }
+}
+
+async function sendMessage(messageOverride = null, alreadyDisplayed = false) {
     const input = document.getElementById("messageInput");
-    const message = input.value.trim();
+    const message = messageOverride || input.value.trim();
     if (!message || !state.userId) return;
 
     const isNewSession = !state.currentSessionId;
 
-    addMessage(message, true);
-    input.value = "";
+    if (!alreadyDisplayed) addMessage(message, true);
+    if (!messageOverride) input.value = "";
     setInputBarEnabled(false);
 
     const typingRow = addMessage("Typing...", false);
@@ -529,11 +613,17 @@ async function sendMessage() {
             headers: { "accept": "application/json" }
         });
 
+        const data = await response.json();
+        if (response.status === 409 && data.detail?.error_code === "SESSION_SIZE_EXCEEDED") {
+            typingRow.remove();
+            showSessionLimitDialog(message);
+            return;
+        }
+
         if (!response.ok) {
             throw new Error("Chat request failed: " + response.status);
         }
 
-        const data = await response.json();
         typingRow.remove();
         addMessage(data.response || "No response received.", false);
 

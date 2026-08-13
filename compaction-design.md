@@ -13,11 +13,12 @@ Design :
 2. in chat table, we will keep size of each message
 3. session table is just sum of this size
 
-4. Wehnever we run the compaction, all messages present in the session will be compacted and compaction result will be saved in saperate table
-5. when we do compaction we will save, we will save timestamp in compaction
-7. when user sends the message, then we will look into compaction tabel,  fi there is any result for given session id, we will read that along with timestamp
-8. use this timestamp to red conversation history after this timestamp
-9. send compaction result and trimmed conversaiojn history to the openai api
+4. Whenever we run the compaction, all messages present in the session will be compacted and compaction result will be saved in saperate table
+5. when we do compaction we will save it, 
+6. we will save timestamp in compaction
+7. when user sends the message, then we will look into compaction tabel,  if there is any result for given session id, we will read that along with timestamp
+8. use this timestamp to read conversation history after this timestamp
+9. send compaction result and trimmed conversation history to the openai api
 
 
 CX behavour : 
