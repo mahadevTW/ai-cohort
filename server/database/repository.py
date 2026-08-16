@@ -121,7 +121,7 @@ def getSizeOfSession(session_id: str):
     uuid_session_id = UUID(session_id) if isinstance(session_id, str) else session_id
     with Session(session_engine) as session:
         chat_session = session.get(ChatSession, uuid_session_id)
-        return chat_session.size_before_compaction or 0 if chat_session else 0
+        return chat_session.size_after_compaction or 0 if chat_session else 0
 
 def update_session_size(session_id: str, message: str):
     uuid_session_id = UUID(session_id) if isinstance(session_id, str) else session_id
@@ -150,3 +150,17 @@ def insertCompaction(compaction_message: CompactionResult) -> CompactionResult:
         session.refresh(compaction_message)
         return compaction_message
 
+def get_compaction_result_for_session(session_id: UUID) -> CompactionResult | None:
+    with Session(session_engine) as session:
+        statement = select(CompactionResult).where(CompactionResult.session_id == session_id)
+        return session.exec(statement).first()  
+
+def select_all_messages_for_session_id_after_timestamp(session_id: UUID, timestamp: str) -> list[ChatMessage]:
+    with Session(session_engine) as session:
+        statement = (
+            select(ChatMessage)
+            .where(ChatMessage.session_id == session_id)
+            .where(ChatMessage.timestamp > timestamp)
+            .order_by(ChatMessage.timestamp)
+        )
+        return session.exec(statement).all()

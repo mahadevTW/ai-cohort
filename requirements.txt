@@ -33,4 +33,5 @@ websocket-client==1.9.0
 widgetsnbextension==4.0.15
 sqlmodel==0.0.24
 pytest==7.4.2
+openai==2.43.0
 

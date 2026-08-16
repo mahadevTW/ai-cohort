@@ -488,6 +488,17 @@ async function sendMessage() {
 
         const data = await response.json();
         chatBox.removeChild(typingRow);
+
+        if (!response.ok) {
+            const detail = data.detail || "Something went wrong.";
+            if (response.status === 400 && detail === "Session size exceeds compaction limit") {
+                addMessage("Your session is too large. Please compact your session before continuing.", false);
+            } else {
+                addMessage(detail, false);
+            }
+            return;
+        }
+
         addMessage(data.response || "No response received.", false);
 
         if (data.session_id && !currentSessionId) {
@@ -497,7 +508,7 @@ async function sendMessage() {
 
     } catch (err) {
         chatBox.removeChild(typingRow);
-        addMessage("Failed to connect to server.", false);
+        addMessage("Something went wrong.", false);
         console.error(err);
     }
 }

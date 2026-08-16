@@ -2,19 +2,21 @@ import os
 from typing import Optional
 
 from uuid import UUID
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, Request, HTTPException
 from fastapi.templating import Jinja2Templates
 from dotenv import load_dotenv
 import uvicorn
 from openai_client import openai_chat,compact_chat_history
 from database.repository import (
     create_db_and_tables,
+    get_compaction_result_for_session,
     insert_chat_session,
     insert_chat_message,
     select_all_chat_sessions_for_userid,
     select_all_chat_messages_for_session_id,
     create_user,
     getSizeOfSession,
+    select_all_messages_for_session_id_after_timestamp,
     update_session_size,
     update_session_size_after_compaction,
     insertCompaction
@@ -67,7 +69,7 @@ def chat_endpoint(message: str, user_id:str, session_id: Optional[str] = None):
 
     session_size= getSizeOfSession(session_id) if session_id else 0
     if session_size > int(os.getenv("MAX_COMPACTION_SIZE")):
-        raise Exception("Session size exceeds compaction limit")
+        raise HTTPException(status_code=400, detail="Session size exceeds compaction limit")
     if not session_id:
         # create session
         session = insert_chat_session(ChatSession(user_id=UUID(user_id), session_title=message))        
@@ -78,14 +80,25 @@ def chat_endpoint(message: str, user_id:str, session_id: Optional[str] = None):
         update_session_size(session.id, response)
         return {"response": response, "session_id": session.id}
     sid = UUID(session_id)
-    messages = select_all_chat_messages_for_session_id(session_id=sid)
-    response = openai_chat(message,history=messages)
-    # save original message into db and save chat response into db
-    insert_chat_message(ChatMessage(message=message, session_id=sid, role="user"))
-    update_session_size(sid, message)
-    insert_chat_message(ChatMessage(message=response, session_id=sid, role="assistant"))
-    update_session_size(sid, response)
-    return {"response": response, "session_id": session_id}
+    compaction_result=get_compaction_result_for_session(sid)
+    if(compaction_result and compaction_result.size_of_compact>0):
+        messages = select_all_messages_for_session_id_after_timestamp(session_id=sid, timestamp=compaction_result.created_at)
+        response = openai_chat(message,history=messages,compaction_result=compaction_result.compact_result)
+        # save original message into db and save chat response into db
+        insert_chat_message(ChatMessage(message=message, session_id=sid, role="user"))
+        update_session_size(sid, message)
+        insert_chat_message(ChatMessage(message=response, session_id=sid, role="assistant"))
+        update_session_size(sid, response)
+        return {"response": response, "session_id": session_id}
+    else:
+        messages = select_all_chat_messages_for_session_id(session_id=sid)
+        response = openai_chat(message,history=messages)
+        # save original message into db and save chat response into db
+        insert_chat_message(ChatMessage(message=message, session_id=sid, role="user"))
+        update_session_size(sid, message)
+        insert_chat_message(ChatMessage(message=response, session_id=sid, role="assistant"))
+        update_session_size(sid, response)
+        return {"response": response, "session_id": session_id}
     
     
     
