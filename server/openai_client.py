@@ -1,6 +1,5 @@
 import json
 import os
-from pathlib import Path
 
 from dotenv import load_dotenv
 from openai import OpenAI
@@ -15,7 +14,7 @@ if not api_key:
 
 client = OpenAI(
     api_key=api_key,
-    timeout=30.0,
+    timeout=120.0,
 )
 
 def openai_chat(
@@ -71,6 +70,65 @@ def openai_chat(
     )
 
     return response.choices[0].message.content
+
+
+def chunk_file(data: str) -> list[dict]:
+
+    master_message = """
+OUTPUT FORMAT:
+
+Return ONLY a valid JSON array.
+
+Example:
+
+[
+    {
+        "section": "Section 1: Purpose and Scope",
+        "content": "..."
+    },
+    {
+        "section": "Section 2: Pre-Boarding",
+        "content": "..."
+    }
+]
+
+Rules:
+- Chunk the document based on its sections.
+- Keep the complete content belonging to each section together.
+- Do not summarize.
+- Do not modify the original content.
+- Do not remove information.
+- Preserve headings and important details.
+- Use the actual section name from the document.
+- If a document has subsections, keep them inside their parent section.
+- Return ONLY the JSON array.
+"""
+
+    response = client.chat.completions.create(
+        model="gpt-5-mini",
+        messages=[
+            {
+                "role": "system",
+                "content": master_message,
+            },
+            {
+                "role": "user",
+                "content": data,
+            },
+        ],
+    )
+
+    print(
+        f"Input tokens: {response.usage.prompt_tokens}, "
+        f"Output tokens: {response.usage.completion_tokens}"
+    )
+
+    chunks = json.loads(
+        response.choices[0].message.content
+    )
+
+    return chunks
+
 
 def compact_chat_history(
     history: list[ChatMessage] = [],
