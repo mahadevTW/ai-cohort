@@ -1,17 +1,48 @@
-import chromadb
-
 import os
 import sys
 
-# Resolve paths from the repository root so this script works regardless of
-# the directory from which it is launched.
+# Resolve paths from the repository root.
 PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-sys.path.append(PROJECT_ROOT)
+# Put the project root before this script's directory. This prevents the local
+# rag/chromadb.py module from shadowing the installed chromadb package.
+sys.path.insert(0, PROJECT_ROOT)
 
 from server.openai_client import chunk_file
+from rag.embedder import embed_chunks
+from rag.chromadb import COLLECTION_NAME, store_chunks
+
+
+def print_chunks(chunks):
+    """
+    Print chunks returned by the LLM chunking logic.
+    """
+
+    print("\n")
+    print("=" * 100)
+    print("                    CHUNKS RECEIVED FROM LLM")
+    print("=" * 100)
+
+    print(f"\nTotal chunks: {len(chunks)}\n")
+
+    for index, chunk in enumerate(chunks, start=1):
+
+        print(f"Chunk #{index}")
+        print("-" * 100)
+
+        print(f"Id: {chunk.get('Id', '')}")
+        print(f"Section: {chunk.get('section', '')}")
+        print(f"Subsection: {chunk.get('Subsection', '')}")
+
+        print("\nContent:")
+        print(chunk.get("Content", ""))
+
+        print("\n" + "=" * 100)
+
+    print("\n")
 
 
 def main():
+
     file_path = os.path.join(
         PROJECT_ROOT,
         "data",
@@ -22,19 +53,50 @@ def main():
     print(f"Processing file: {file_path}")
 
     try:
+
+        # ============================================================
+        # 1. Chunk document using your existing LLM logic
+        # ============================================================
+
         chunks = chunk_file(file_path)
 
-        print("\n========== CHUNKS ==========\n")
+        # Print exactly what we received from the LLM
+        print_chunks(chunks)
 
-        for chunk in chunks:
-            print(f"Id: {chunk['Id']}")
-            print(f"section: {chunk['section']}")
-            print(f"Subsection: {chunk['Subsection']}")
-            print(f"Content: {chunk['Content']}")
-            print("\n" + "=" * 80 + "\n")
+        # ============================================================
+        # 2. Generate embeddings
+        # ============================================================
+
+        print("Generating embeddings using all-MiniLM-L6-v2...")
+
+        chunks = embed_chunks(chunks)
+
+        print(f"Generated embeddings for {len(chunks)} chunks.")
+
+        # ============================================================
+        # 3. Store chunks in the shared ChromaDB collection
+        # ============================================================
+
+        collection = store_chunks(chunks, file_path)
+
+        # ============================================================
+        # 4. Final result
+        # ============================================================
+
+        print("\n")
+        print("=" * 100)
+        print("                    INGESTION COMPLETE")
+        print("=" * 100)
+
+        print(f"Collection: {COLLECTION_NAME}")
+        print(f"Chunks processed: {len(chunks)}")
+        print(f"Documents in ChromaDB: {collection.count()}")
+        print("=" * 100)
 
     except Exception as e:
-        print(f"Error processing file: {e}")
+
+        print(f"\nError processing file: {e}")
+
         raise
 
 
