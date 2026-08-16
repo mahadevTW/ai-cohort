@@ -9,7 +9,7 @@ sys.path.insert(0, PROJECT_ROOT)
 
 from server.openai_client import chunk_file
 from rag.embedder import embed_chunks
-from rag.chromadb import COLLECTION_NAME, store_chunks
+from rag.chromadb import COLLECTION_NAME, print_records, store_chunks
 
 
 def print_chunks(chunks):
@@ -92,6 +92,8 @@ def main():
         print(f"Chunks processed: {len(chunks)}")
         print(f"Documents in ChromaDB: {collection.count()}")
         print("=" * 100)
+
+        print_records()
 
     except Exception as e:
 

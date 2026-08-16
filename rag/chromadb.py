@@ -60,3 +60,30 @@ def store_chunks(chunks: list[dict], source_file: str):
         metadatas=metadatas,
     )
     return collection
+
+
+def print_records() -> None:
+    """Print all stored policy records without including their embedding vectors."""
+    collection = get_collection()
+    records = collection.get(include=["documents", "metadatas"])
+
+    ids = records.get("ids", [])
+    documents = records.get("documents", [])
+    metadatas = records.get("metadatas", [])
+
+    print("\n" + "=" * 100)
+    print("                    RECORDS IN CHROMADB")
+    print("=" * 100)
+    print(f"Total records: {len(ids)}")
+
+    if not ids:
+        print("No records found.")
+        return
+
+    for record_id, document, metadata in zip(ids, documents, metadatas):
+        print("\n" + "-" * 100)
+        print(f"ID: {record_id}")
+        print(f"Metadata: {metadata}")
+        print(f"Document:\n{document}")
+
+    print("\n" + "=" * 100)
