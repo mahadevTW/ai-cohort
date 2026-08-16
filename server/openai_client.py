@@ -4,7 +4,7 @@ import os
 import httpx
 from dotenv import load_dotenv
 
-from database.models import ChatMessage
+from server.database.models import ChatMessage
 
 load_dotenv()
 
@@ -81,3 +81,126 @@ def openai_chat(message, history=None, compacted_message: str | None = None):
         return response.json()["choices"][0]["message"]["content"]
    else:
         return f"Error: {response.status_code} - {response.text}"
+
+def chunk_file(file_path: str) -> list[dict]:
+    """
+    Read a file from the given path and ask OpenAI to split it
+    into logical sections/subsections.
+
+    Returns:
+        [
+            {
+                "Id": 1,
+                "section": "...",
+                "Subsection": "...",
+                "Content": "..."
+            }
+        ]
+    """
+
+    api_key = os.getenv("OPENAI_KEY") or os.getenv("OPENAI_API_KEY")
+
+    if not api_key:
+        raise RuntimeError("OPENAI_KEY environment variable is not set")
+
+    # Read the file
+    try:
+        with open(file_path, "r", encoding="utf-8") as file:
+            file_content = file.read()
+    except FileNotFoundError:
+        raise FileNotFoundError(f"File not found: {file_path}")
+    except Exception as e:
+        raise RuntimeError(f"Error reading file: {e}")
+
+    if not file_content.strip():
+        return []
+
+    system_prompt = """
+You are a document chunking assistant.
+
+Your job is to split the provided document into logical, meaningful chunks.
+
+For every chunk, return exactly these fields:
+
+- Id: Sequential integer starting from 1
+- section: Main section name
+- Subsection: Subsection name. If there is no subsection, return an empty string.
+- Content: The original content belonging to this section/subsection.
+
+Important rules:
+
+1. Preserve the original meaning and information.
+2. Do NOT summarize the content.
+3. Do NOT remove important information.
+4. Do NOT invent information.
+5. Keep related paragraphs together.
+6. Use the document's existing headings when possible.
+7. If headings do not exist, infer reasonable section/subsection names from the content.
+8. Id must start at 1 and increment sequentially.
+9. Return ONLY valid JSON.
+10. Return a JSON object with exactly one key, `chunks`, whose value is the
+    array of chunk objects.
+"""
+
+    user_prompt = f"""
+Chunk the following document:
+
+---------------- DOCUMENT START ----------------
+
+{file_content}
+
+---------------- DOCUMENT END ----------------
+"""
+
+    request_body = {
+        "model": "gpt-5-mini",
+        "messages": [
+            {
+                "role": "system",
+                "content": system_prompt
+            },
+            {
+                "role": "user",
+                "content": user_prompt
+            }
+        ],
+        "response_format": {
+            "type": "json_object"
+        }
+    }
+
+    response = httpx.post(
+        "https://api.openai.com/v1/chat/completions",
+        headers={
+            "Authorization": f"Bearer {api_key}",
+            "Content-Type": "application/json"
+        },
+        json=request_body,
+        timeout=120,
+    )
+
+    if response.status_code != 200:
+        raise RuntimeError(
+            f"Error calling OpenAI API: "
+            f"{response.status_code} - {response.text}"
+        )
+
+    response_json = response.json()
+
+    content = response_json["choices"][0]["message"]["content"]
+
+    try:
+        result = json.loads(content)
+    except json.JSONDecodeError as e:
+        raise RuntimeError(
+            f"OpenAI returned invalid JSON: {e}\n"
+            f"Response: {content}"
+        )
+
+    if not isinstance(result, dict) or not isinstance(result.get("chunks"), list):
+        raise RuntimeError(
+            "Unexpected OpenAI response format. Expected an object with a "
+            f"'chunks' array, received: {result}"
+        )
+
+    return result["chunks"]
