@@ -1,4 +1,5 @@
 import json
+import uuid
 from pathlib import Path
 from typing import Optional
 
@@ -12,6 +13,51 @@ load_dotenv(Path(__file__).resolve().parent.parent / ".env")
 
 # Reads OPENAI_API_KEY from the environment.
 client = OpenAI(timeout=30.0)
+
+
+def openai_embedding(source_file: str) -> list[dict]:
+    """Chunk a JSON knowledge file, embed its chunks, and store them in Chroma."""
+    from database import chroma
+
+    source_records = json.loads(Path(source_file).read_text(encoding="utf-8"))
+    chunks: list[dict] = []
+
+    for record in source_records:
+        response = client.chat.completions.create(
+            model="gpt-5-mini",
+            messages=[
+                {
+                    "role": "system",
+                    "content": "Split the supplied content into useful chunks. Return JSON with a chunks array; each item must have a content field.",
+                },
+                {"role": "user", "content": record["content"]},
+            ],
+            response_format={"type": "json_object"},
+        )
+        generated_chunks = json.loads(response.choices[0].message.content or '{"chunks": []}')["chunks"]
+
+        for generated_chunk in generated_chunks:
+            chunks.append({
+                "uuid": str(uuid.uuid4()),
+                "filename": record["filename"],
+                "section": record["section"],
+                "subsection": record["subsection"],
+                "content": generated_chunk["content"],
+            })
+
+    embeddings = client.embeddings.create(
+        model="text-embedding-3-small",
+        input=[chunk["content"] for chunk in chunks],
+    )
+    for chunk, embedding in zip(chunks, embeddings.data):
+        chroma.save_vector(
+            vector_id=chunk["uuid"],
+            vector=embedding.embedding,
+            document=chunk["content"],
+            metadata={key: value for key, value in chunk.items() if key != "content"},
+        )
+
+    return chunks
 
 def openai_chat(
     message: str,
@@ -130,3 +176,59 @@ Target approximately 20–30 percent of the original conversation's token count 
         return compacted_text
     except APIStatusError as error:
         raise Exception(f"Error: {error.status_code} - {error.response.text}") from error
+
+
+'''system_messages = Write a Python function named `openai_chunker` that accepts the following parameters:
+
+- `filename: str` — the actual file name
+- `content: str` — the complete text content read from the file
+
+The function should use the OpenAI Python SDK to analyze the provided content and split it into meaningful, semantically coherent chunks.
+
+Requirements:
+
+1. Pass the file content to the OpenAI model and ask it to identify logical sections and subsections and divide the content into appropriate chunks.
+
+2. The OpenAI model should return structured data containing:
+   - `section`
+   - `subsection`
+   - `content`
+
+3. The `filename` must be the actual filename provided to the function. Do not ask the LLM to generate or modify the filename.
+
+4. For every generated chunk, generate a unique identifier using Python's `uuid4()` function from the `uuid` module:
+   
+   ```python
+   str(uuid4())'''
+
+def openai_chunker(filename: str, content: str) -> list[dict]:
+    from uuid import uuid4
+
+    response = client.chat.completions.create(
+        model="gpt-5-mini",
+        messages=[
+            {
+                "role": "system",
+                "content": (
+                    "You are a helpful assistant that splits the provided content into meaningful chunks. "
+                    "Return JSON with a 'chunks' array; each item must have 'section', 'subsection', and 'content' fields."
+                ),
+            },
+            {"role": "user", "content": content},
+        ],
+        response_format={"type": "json_object"},
+    )
+
+    generated_chunks = json.loads(response.choices[0].message.content or '{"chunks": []}')["chunks"]
+
+    structured_chunks = []
+    for generated_chunk in generated_chunks:
+        structured_chunks.append({
+            "document_id": str(uuid4()),
+            "filename": filename,
+            "section": generated_chunk.get("section", ""),
+            "subsection": generated_chunk.get("subsection", ""),
+            "content": generated_chunk.get("content", ""),
+        })
+
+    return structured_chunks    
