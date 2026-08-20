@@ -15,7 +15,7 @@ def embedding(directory_path):
             # Call the openai_chunker function with the content of the directory and file
             print(f"Calling CHUNKER for file: {filename}")
             chunks = chunker(directory_path,filename=filename)
-            print(f"Processed file: {filename}, generated {len(chunks)} chunks.")
+            print(f"Finished processing file: {filename}, generated {len(chunks)} chunks.")
         # Save each chunk as a vector in ChromaDB
     # 2. Save chunks + embeddings into ChromaDB
     store = VectorStore()
@@ -30,7 +30,21 @@ def embedding(directory_path):
 
     print(f"Successfully embedded {len(chunks)} chunks.")
 
+def search_my_vectors(search_text: str = "What is the Password Complexity and Length Rules policy?"):
+    """Embed a query with the ingestion model and verify Chroma returns matches."""
+    print(f"From search_my_vectors: 1. Embedding the search text: {search_text}")
+    store = VectorStore()
+    query_vector = embed(search_text)
+
+    # The current VectorStore API is named search_vector (singular).
+    search_results = store.search_vector(query_vector=query_vector, top_k=5)
+    print(f"From search_my_vectors: 2")
+    assert search_results, "Expected at least one matching document in ChromaDB"
+    assert all(result["id"] and result["text"] for result in search_results)
+    print(f"From search_my_vectors: 3. Search results: {search_results}")
+
 if __name__ == "__main__":
     # Example usage
     embedding(directory_path_tst)
-    print(f"Total chunks generated and saved") 
+    search_my_vectors (search_text="What is the Password Complexity and Length Rules policy?")
+    print(f"From Main: Total chunks generated and saved") 

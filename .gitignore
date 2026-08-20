@@ -79,5 +79,5 @@ coverage/
 dist/
 build/
 coverage/
-
+server/chroma_db/
 data/

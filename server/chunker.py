@@ -22,7 +22,7 @@ def chunker(directory_path,filename:str):
             print(f"Before Processing file: {filename}")
             generated_chunks = openai_chunker(filename=filename, content=content)
             chunks.extend(generated_chunks)
-            print(f"Processed file: {filename}, generated {len(generated_chunks)} chunks.")
+            print(f"After processing file: {filename}, generated {len(generated_chunks)} chunks.")
     return chunks
 
 if __name__ == "__main__":
