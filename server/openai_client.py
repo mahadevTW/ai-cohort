@@ -12,7 +12,7 @@ from openai import APIStatusError, OpenAI
 load_dotenv(Path(__file__).resolve().parent.parent / ".env")
 
 # Reads OPENAI_API_KEY from the environment.
-client = OpenAI(timeout=30.0)
+client = OpenAI(timeout=120.0)
 
 
 def openai_embedding(source_file: str) -> list[dict]:

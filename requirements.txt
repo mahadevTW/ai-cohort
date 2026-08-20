@@ -10,4 +10,5 @@ dotenv
 openai
 sqlmodel
 tiktoken
-chromadb
+chromadb==0.4.0
+sentence-transformers==3.0.1
