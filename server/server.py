@@ -5,6 +5,7 @@ from uuid import UUID
 from fastapi import FastAPI, HTTPException, Request
 from database.db import create_db_and_tables, select_latest_compaction_result_for_session_id, select_chat_messages_after_timestamp
 from openai_client import openai_chat, compactMessages
+from rag import get_rag_context
 import uvicorn
 from database.db import insert_chat_session, insert_chat_message, select_all_chat_sessions_for_userid, select_all_chat_messages_for_session_id, get_active_context_size, increase_session_size, insert_compaction_result, set_session_size_after_compaction
 from database.models import ChatSession, ChatMessage, CompactionResult
@@ -62,6 +63,8 @@ def chat_endpoint(message: str, user_id:str, session_id: Optional[str] = None):
     # save user message into db
     # save llm response to db
     
+    rag_context = get_rag_context(message)
+
     # Check the actual context sent to the model: latest compaction summary plus
     # messages created after that compaction's timestamp.
     current_size = get_active_context_size(UUID(session_id)) if session_id else 0
@@ -79,7 +82,7 @@ def chat_endpoint(message: str, user_id:str, session_id: Optional[str] = None):
     if not session_id:
         # create session
         session = insert_chat_session(ChatSession(user_id=UUID(user_id), session_title=message))        
-        response = openai_chat(message)
+        response = openai_chat(message, rag_context=rag_context)
         insert_chat_message(ChatMessage(message=message, session_id=session.id, role="user", size=len(message)))
         insert_chat_message(ChatMessage(message=response, session_id=session.id, role="assistant", size=len(response)))
         increase_session_size(session.id, len(message) + len(response))
@@ -101,6 +104,7 @@ def chat_endpoint(message: str, user_id:str, session_id: Optional[str] = None):
         message,
         history=messages,
         compaction_summary=compaction_summary,
+        rag_context=rag_context,
     )
     # save original message into db and save chat response into db
     insert_chat_message(ChatMessage(message=message, session_id=sid, role="user", size=len(message)))

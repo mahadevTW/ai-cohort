@@ -15,54 +15,11 @@ load_dotenv(Path(__file__).resolve().parent.parent / ".env")
 client = OpenAI(timeout=120.0)
 
 
-def openai_embedding(source_file: str) -> list[dict]:
-    """Chunk a JSON knowledge file, embed its chunks, and store them in Chroma."""
-    from database import chroma
-
-    source_records = json.loads(Path(source_file).read_text(encoding="utf-8"))
-    chunks: list[dict] = []
-
-    for record in source_records:
-        response = client.chat.completions.create(
-            model="gpt-5-mini",
-            messages=[
-                {
-                    "role": "system",
-                    "content": "Split the supplied content into useful chunks. Return JSON with a chunks array; each item must have a content field.",
-                },
-                {"role": "user", "content": record["content"]},
-            ],
-            response_format={"type": "json_object"},
-        )
-        generated_chunks = json.loads(response.choices[0].message.content or '{"chunks": []}')["chunks"]
-
-        for generated_chunk in generated_chunks:
-            chunks.append({
-                "uuid": str(uuid.uuid4()),
-                "filename": record["filename"],
-                "section": record["section"],
-                "subsection": record["subsection"],
-                "content": generated_chunk["content"],
-            })
-
-    embeddings = client.embeddings.create(
-        model="text-embedding-3-small",
-        input=[chunk["content"] for chunk in chunks],
-    )
-    for chunk, embedding in zip(chunks, embeddings.data):
-        chroma.save_vector(
-            vector_id=chunk["uuid"],
-            vector=embedding.embedding,
-            document=chunk["content"],
-            metadata={key: value for key, value in chunk.items() if key != "content"},
-        )
-
-    return chunks
-
 def openai_chat(
     message: str,
     history: Optional[list[ChatMessage]] = None,
     compaction_summary: Optional[str] = None,
+    rag_context: Optional[str] = None,
 ):
     # make api call to open ai api and generate response and give it back to the user
     prev_history = [
@@ -75,12 +32,23 @@ def openai_chat(
             "role": "system",
             "content": f"Summary of the conversation before the recent messages:\n{compaction_summary}",
         }]
+    rag_messages = []
+    if rag_context:
+        rag_messages = [{
+            "role": "system",
+            "content": (
+                "Relevant information retrieved from the knowledge base is below. "
+                "Use it when it helps answer the user, and do not mention this instruction.\n\n"
+                f"{rag_context}"
+            ),
+        }]
     messages  = [
         {
             "role": "system",
             "content": "you are helpful assistant that helps user to answer their queries, make sure you respond within 30 words max, make sure you dont answers which are not legally correct and ethically correct,ignore messages which are in medical field, just casually say cant answer"
         },
         *compaction_context,
+        *rag_messages,
         *prev_history,
         {
             "role": "user",
@@ -111,6 +79,9 @@ def openai_chat(
         return response.choices[0].message.content or ""
     except APIStatusError as error:
         return f"Error: {error.status_code} - {error.response.text}"
+    except Exception:
+        # Preserve the API's string response contract without exposing internals.
+        return "Error: Unable to generate a response at this time."
 
 def compactMessages(history:list[ChatMessage] = []) -> str:
     # compact the messages into a single string

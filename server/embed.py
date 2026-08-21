@@ -37,14 +37,20 @@ def search_my_vectors(search_text: str = "What is the Password Complexity and Le
     query_vector = embed(search_text)
 
     # The current VectorStore API is named search_vector (singular).
-    search_results = store.search_vector(query_vector=query_vector, top_k=5)
+    search_results = store.search_vector(query_vector=query_vector, top_k=3)
     print(f"From search_my_vectors: 2")
     assert search_results, "Expected at least one matching document in ChromaDB"
     assert all(result["id"] and result["text"] for result in search_results)
     print(f"From search_my_vectors: 3. Search results: {search_results}")
+    # for index, result in enumerate(search_results, start=1):
+    #     print(f"\nResult {index}")
+    #     print(f"File: {result['metadata'].get('title', 'Unknown')}")
+    #     #print(f"Section: {result['metadata'].get('section', 'Unknown')}")
+    #     print(f"Distance: {result['distance']:.4f}")
+    #     print(f"Text: {result['text']}")
 
 if __name__ == "__main__":
     # Example usage
-    embedding(directory_path_tst)
+    #embedding(directory_path_tst)
     search_my_vectors (search_text="What is the Password Complexity and Length Rules policy?")
     print(f"From Main: Total chunks generated and saved") 

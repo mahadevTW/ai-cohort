@@ -82,6 +82,15 @@ class VectorStore:
 
         return response
 
+
+def search_vectors(query_vector, top_k=5):
+    """Search the default document collection for vectors similar to a query.
+
+    This convenience function keeps callers independent of ``VectorStore`` while
+    reusing its existing search implementation.
+    """
+    return VectorStore().search_vector(query_vector=query_vector, top_k=top_k)
+
 if __name__ == "__main__":
     # Example usage
     store = VectorStore()
