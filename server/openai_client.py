@@ -4,7 +4,10 @@ import os
 import httpx
 from dotenv import load_dotenv
 
-from server.database.models import ChatMessage
+try:
+    from database.models import ChatMessage
+except ModuleNotFoundError:
+    from server.database.models import ChatMessage
 
 load_dotenv()
 
@@ -42,8 +45,12 @@ def compact_messages(messages: list[ChatMessage]) -> str:
     else:
         raise RuntimeError(f"Error calling OpenAI API: {response.status_code} - {response.text}")
 
-def openai_chat(message, history=None, compacted_message: str | None = None):
-   print("Entered openai_chat() function with compacted message",compacted_message)
+def openai_chat(
+    message,
+    history=None,
+    compacted_message: str | None = None,
+    rag_context: str | None = None,
+):
    if history is None:
         history = []
    prev_history = [{"role": msg.role, "content": msg.message} for msg in history]
@@ -64,6 +71,18 @@ def openai_chat(message, history=None, compacted_message: str | None = None):
         messages.append({
             "role": "system",
             "content": f"Summary of earlier conversation so far:\n{compacted_message}"
+        })
+
+   if rag_context:
+        messages.append({
+            "role": "system",
+            "content": (
+                "Use the following retrieved company policy context to answer "
+                "the user's question. If it does not contain the answer, say "
+                "that the policy information is unavailable rather than "
+                "inventing a policy.\n\n"
+                f"{rag_context}"
+            ),
         })
     
    messages.extend(prev_history_payload)

@@ -49,6 +49,36 @@ def test_openai_chat_uses_openai_key_env_var(monkeypatch):
     assert captured["headers"]["Content-Type"] == "application/json"
 
 
+def test_openai_chat_includes_rag_context(monkeypatch):
+    class FakeResponse:
+        status_code = 200
+        text = ""
+
+        def json(self):
+            return {"choices": [{"message": {"content": "Policy answer"}}]}
+
+    captured = {}
+
+    def fake_post(url, headers, json, timeout):
+        captured["json"] = json
+        return FakeResponse()
+
+    monkeypatch.setenv("OPENAI_KEY", "env-test-key")
+    monkeypatch.setattr(httpx, "post", fake_post)
+
+    response = openai_chat(
+        "What is the leave policy?",
+        rag_context="Annual leave requires manager approval.",
+    )
+
+    assert response == "Policy answer"
+    assert any(
+        "Annual leave requires manager approval." in item["content"]
+        for item in captured["json"]["messages"]
+        if item["role"] == "system"
+    )
+
+
 def test_select_user_by_id_existing_user():
     user = User(
         id=uuid.uuid4(),
