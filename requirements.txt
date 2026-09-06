@@ -10,3 +10,8 @@ dotenv
 openai
 sqlmodel
 tiktoken
+chromadb
+sentence-transformers
+flask
+flask_cors
+chroma

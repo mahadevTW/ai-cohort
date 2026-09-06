@@ -5,7 +5,7 @@ from alembic.config import Config
 from requests import session
 from sqlmodel import UUID, Session, create_engine, select
 from sqlmodel import SQLModel, create_engine
-from database.models import User, ChatSession, ChatMessage, CompactionResult
+from server.database.models import User, ChatSession, ChatMessage, CompactionResult
 db_file = "data/database.db"
 db_url = f"sqlite:///{db_file}"
 

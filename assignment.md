@@ -135,5 +135,35 @@ sequenceDiagram
 
 =====================================================
 1. Finish compaction api and recompaction
-2. Try to pass compacted message to openai message
+2. Try to pass compacted message to openai api
 3. convert open ai api to Openai sdk
+
+
+===========================================================
+<!-- Rag tranining -->
+1. Read all the relevent information which is requoired for enterprise search [Files]
+2. Break down this information into meaningfull chunks
+3. while breaking down ensure that we dont loose  citations or store the citations along attach to chunk of information
+4. each of this chunk , convert this to vector, using embedding models
+5. Save this embedding result into vector database
+6. Query and test the database api for pulling information based on the meaning
+===================================================================================
+
+<!-- Chatbot answeing based on the trained data -->
+1. User asks the Question
+2. Query vector database with symantic search for given query
+3. Pass the Vecotr result to LLM model as reference information
+4. Read LLM result and show the response to user
+
+
+=====================================
+1. Refine the chunking to make response more relevent or sometime its not responding debug and reifne
+2. Optionsl : try if you can embed the images and search by image also
+Tool Calling:
+3. try implementing sequential tools in loop along with parameters
+        User asks question how is the wether in Pune
+        Use 1st tool, to pull lat long from given city
+                API : curl https://geocoding-api.open-meteo.com/v1/search\?name\=Sangli\&count\=1\&language\=en\&format\=json
+
+        Use this response whicj will have lat long and pass this to another tool wiich is get_wether for given lat long
+                API : curl https://api.open-meteo.com/v1/forecast\?latitude\=52.52\&longitude\=13.41\&current\=temperature_2m,wind_speed_10m\&hourly\=temperature_2m,relative_humidity_2m,wind_speed_10m

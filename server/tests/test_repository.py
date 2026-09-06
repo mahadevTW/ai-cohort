@@ -2,8 +2,8 @@ import uuid
 
 from sqlmodel import SQLModel, create_engine
 
-import database.db as repository
-from database.models import User, ChatSession, ChatMessage, MessageRole
+import server.database.db as repository
+from server.database.models import User, ChatSession, ChatMessage, MessageRole
 
 
 def setup_module():

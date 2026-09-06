@@ -95,7 +95,7 @@ The chat app lives in `server/`. From the repo root, with the venv activated:
 
 ```bash
 source venv/bin/activate
-python server/server.py
+python -m server.server
 ```
 
 This starts the API on `http://localhost:8000` and creates `data/database.db` on first run.
@@ -111,7 +111,7 @@ source venv/bin/activate
 alembic -c server/alembic.ini revision --autogenerate -m "describe the change"
 ```
 
-Then open the generated file under `server/alembic/versions/` and check it did what you expect before committing it — autogenerate is a diff, so it can't tell a renamed column from a dropped-and-added one. The next `python server/server.py` (by you or anyone who pulls your change) will apply it automatically.
+Then open the generated file under `server/alembic/versions/` and check it did what you expect before committing it — autogenerate is a diff, so it can't tell a renamed column from a dropped-and-added one. The next `python -m server.server` (by you or anyone who pulls your change) will apply it automatically.
 
 ---
 

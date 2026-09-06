@@ -309,6 +309,18 @@ if ! python -m pip install -r requirements.txt --quiet; then
 fi
 ok "All packages installed"
 
+info "Installing project package in editable mode ..."
+if ! python -m pip install -e . --quiet; then
+    fail "Editable install failed."
+    echo ""
+    echo "  Try running it manually to see the error:"
+    echo "    source venv/bin/activate"
+    echo "    pip install -e ."
+    echo ""
+    exit 1
+fi
+ok "Project package installed (editable)"
+
 # ── Step 4: Register Jupyter kernel ───────────────────────────────────────────
 echo ""
 echo -e "${BOLD}  [4/7] Registering Jupyter kernel${NC}"

@@ -81,3 +81,6 @@ build/
 coverage/
 
 data/
+
+# Generated SQLite simulation db
+agent_sim.db

@@ -3,11 +3,11 @@ from typing import Optional
 
 from uuid import UUID
 from fastapi import FastAPI,Request
-from database.db import create_db_and_tables
-from openai_client import openai_chat, compactMessages
+from server.database.db import create_db_and_tables
+from server.openai_client import openai_chat, compactMessages
 import uvicorn
-from database.db import insert_chat_session, insert_chat_message, select_all_chat_sessions_for_userid, select_all_chat_messages_for_session_id, get_session_size, increase_session_size, insert_compaction_result
-from database.models import ChatSession, ChatMessage, CompactionResult
+from server.database.db import insert_chat_session, insert_chat_message, select_all_chat_sessions_for_userid, select_all_chat_messages_for_session_id, get_session_size, increase_session_size, insert_compaction_result
+from server.database.models import ChatSession, ChatMessage, CompactionResult
 from fastapi.templating import Jinja2Templates
 # load values from .env file and set them as environment variables
 from dotenv import load_dotenv
@@ -81,4 +81,4 @@ def chat_endpoint(message: str, user_id:str, session_id: Optional[str] = None):
 if __name__ == "__main__":
     # import database and create tables if they don't exist
     create_db_and_tables()
-    uvicorn.run("server:app", host="0.0.0.0", port=8000, reload=True)
+    uvicorn.run("server.server:app", host="0.0.0.0", port=8000, reload=True)

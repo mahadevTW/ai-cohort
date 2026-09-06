@@ -259,6 +259,19 @@ if ($LASTEXITCODE -ne 0) {
 }
 ok "All packages installed"
 
+info "Installing project package in editable mode ..."
+python -m pip install -e . --quiet
+if ($LASTEXITCODE -ne 0) {
+    err "Editable install failed."
+    Write-Host ""
+    Write-Host "  Try running it manually to see the full error:" -ForegroundColor Yellow
+    Write-Host "    venv\Scripts\Activate.ps1"
+    Write-Host "    pip install -e ."
+    Write-Host ""
+    exit 1
+}
+ok "Project package installed (editable)"
+
 # ── Step 4: Register Jupyter kernel ───────────────────────────────────────────
 Write-Host ""
 Write-Host "  [4/7] Registering Jupyter kernel" -ForegroundColor White
