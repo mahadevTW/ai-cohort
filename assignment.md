@@ -132,8 +132,22 @@ sequenceDiagram
 3. moving away from direct api to Open AI sdk
 4. Understanding system prompt and role based prompt
 
-
+13-AUG
 =====================================================
 1. Finish compaction api and recompaction
 2. Try to pass compacted message to openai message
 3. convert open ai api to Openai sdk
+
+
+Aug-16
+Chuking and send RAG context to LLM to get relevent instance
+
+Aug-23
+refinement of chunking trategry assigment
+Also AI image embedding
+
+#6-Sept
+Inetragte tool calling agent to chat. It should also response back to consumer to chat while executing, So that user can see the progress need to post 
+
+#Sept-06
+ Symantic / RAG serarch can also be exposed as tools so that llm can decide weather we need to actually do symantic search or not - this will reduce the RAG execution to search in our database or general information.

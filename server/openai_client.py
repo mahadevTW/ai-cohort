@@ -183,6 +183,7 @@ def openai_chunker(filename: str, content: str) -> list[dict]:
                 "content": (
                     "You are a helpful assistant that splits the provided content into meaningful chunks. "
                     "Return JSON with a 'chunks' array; each item must have 'section', 'subsection', and 'content' fields."
+                    "Use the document's semantic hierarchy as the primary chunking strategy. Keep each subsection intact when reasonably sized. Split only oversized subsections into semantically coherent child chunks. Treat each FAQ question and answer as one independent chunk."
                 ),
             },
             {"role": "user", "content": content},

@@ -17,17 +17,13 @@ def get_rag_context(query: str, top_k: int = 3) -> str:
     try:
         # Import lazily so an unavailable embedding model cannot stop the chat
         # application from starting.
-        from database.chroma import embed, search_vectors
+        from database.chroma import hybrid_search
 
-        query_vector = embed(query)
+        # Retrieve a broader candidate set internally, then return a compact,
+        # fused result list suitable for the chat prompt.
+        results = hybrid_search(query, top_k=top_k, candidate_k=max(12, top_k * 4))
     except Exception:
-        logger.exception("Unable to create an embedding for the RAG query")
-        return ""
-
-    try:
-        results = search_vectors(query_vector=query_vector, top_k=top_k)
-    except Exception:
-        logger.exception("Unable to search ChromaDB for RAG context")
+        logger.exception("Unable to run hybrid policy search for RAG context")
         return ""
 
     contents = [

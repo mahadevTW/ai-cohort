@@ -1,7 +1,7 @@
 #create a function embedding in file embed.py which will call chunker from chunker.py
 #Also, it will make use of functions get_vector, save_vector, search_vectors from chroma.py to receive data from chuker to store in vectors and save it store and retrieve from chromadb
 
-import os
+from pathlib import Path
 
 from chunker import chunker
 from database.chroma import VectorStore, embed
@@ -10,13 +10,12 @@ directory_path_tst = r"C:\AI_Learning\git\ai-cohort\data\policies"
 
 def embedding(directory_path):
     chunks = []
-    for filename in os.listdir(directory_path):
-        if filename.endswith(".md"):
-            # Call the openai_chunker function with the content of the directory and file
-            print(f"Calling CHUNKER for file: {filename}")
-            chunks = chunker(directory_path,filename=filename)
-            print(f"Finished processing file: {filename}, generated {len(chunks)} chunks.")
-        # Save each chunk as a vector in ChromaDB
+    policy_path = Path(directory_path)
+    for path in sorted(policy_path.glob("[0-9][0-9]-*.md")):
+        print(f"Calling CHUNKER for file: {path.name}")
+        file_chunks = chunker(policy_path, filename=path.name)
+        chunks.extend(file_chunks)
+        print(f"Finished processing file: {path.name}, generated {len(file_chunks)} chunks.")
     # 2. Save chunks + embeddings into ChromaDB
     store = VectorStore()
     for chunk in chunks:
@@ -24,7 +23,12 @@ def embedding(directory_path):
         store.save_vector(
             vector=vector,
             text=chunk["content"],
-            metadata={"title": chunk["filename"], "section": chunk["section"]},
+            metadata={
+                "title": chunk["filename"],
+                "policy": chunk["policy"],
+                "section": chunk["section"],
+                "subsection": chunk["subsection"],
+            },
             document_id=chunk["document_id"],
         )
 
@@ -51,6 +55,6 @@ def search_my_vectors(search_text: str = "What is the Password Complexity and Le
 
 if __name__ == "__main__":
     # Example usage
-    #embedding(directory_path_tst)
+    embedding(directory_path_tst)
     search_my_vectors (search_text="What is the Password Complexity and Length Rules policy?")
-    print(f"From Main: Total chunks generated and saved") 
+    print("From Main: Total chunks generated and saved")
