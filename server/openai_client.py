@@ -21,6 +21,7 @@ def openai_chat(
     message: str,
     history: list[ChatMessage] = [],
     compaction_result: str | None = None,
+    rag_context: str | None = None,
 ) -> str:
 
     prev_history = [
@@ -47,6 +48,17 @@ def openai_chat(
             "content": message,
         },
     ]
+
+    if rag_context:
+        messages.append(
+            {
+                "role": "developer",
+                "content": (
+                    "Use the following relevant context to answer the user's query:\n"
+                    f"{rag_context}"
+                ),
+            }
+        )
 
     if compaction_result:
         messages.append(

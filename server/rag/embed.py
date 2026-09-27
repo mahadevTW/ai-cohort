@@ -1,11 +1,27 @@
-import sys
 from pathlib import Path
+import sys
 
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+if __name__ == "__main__":
+    sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from chunker import chunk_document, read_file
+from rag.chunker import chunk_document, read_file
 from database.chroma import VectorStore, embed
 
+def get_rag_context(message: str) -> str | None:
+    query_vector = embed(message)
+    results = VectorStore().search_vector(query_vector)
+    if not results:
+        return None
+
+    chunks = []
+    for r in results:
+        lines = [f"Document: {r['id']}"]
+        if r.get("metadata"):
+            lines.append(f"Source: {r['metadata']}")
+        lines.append(f"Content: {r['text']}")
+        chunks.append("\n".join(lines))
+
+    return "\n\n".join(chunks)
 
 def embed_file(file_path: str):
     """
@@ -31,6 +47,7 @@ def embed_file(file_path: str):
         )
 
     print(f"Successfully embedded {len(chunks)} chunks.")
+    
 
 
 if __name__ == "__main__":
