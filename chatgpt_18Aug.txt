@@ -1,0 +1,884 @@
+query.py
+
+"""
+RAG query functionality.
+
+Takes a user's natural-language query, embeds it using the same
+all-MiniLM-L6-v2 model used during ingestion, retrieves the most
+relevant chunks from ChromaDB, and formats those chunks so they
+can be sent to the LLM as context.
+"""
+
+from typing import Any
+
+from rag.embedder import embed_chunks
+from rag.chromadb import get_collection
+
+
+def search_chromadb(
+    query: str,
+    n_results: int = 5,
+) -> dict[str, Any]:
+    """
+    Search ChromaDB using semantic similarity.
+
+    Args:
+        query: User's natural-language question.
+        n_results: Number of relevant chunks to retrieve.
+
+    Returns:
+        ChromaDB query results containing:
+        - ids
+        - documents
+        - metadatas
+        - distances
+    """
+
+    if not query or not query.strip():
+        raise ValueError("Query cannot be empty.")
+
+    # Generate embedding using the same model used for documents.
+    query_chunk = {
+        "Content": query
+    }
+
+    embedded_query = embed_chunks([query_chunk])
+
+    query_embedding = embedded_query[0]["embedding"]
+
+    # Get the shared ChromaDB collection.
+    collection = get_collection()
+
+    # Perform semantic similarity search.
+    results = collection.query(
+        query_embeddings=[query_embedding],
+        n_results=n_results,
+        include=[
+            "documents",
+            "metadatas",
+            "distances",
+        ],
+    )
+
+    return results
+
+
+def build_rag_context(results: dict[str, Any]) -> str:
+    """
+    Convert ChromaDB search results into text context
+    that can be passed to the LLM.
+
+    The vector embeddings themselves are NOT sent to the LLM.
+    Only the retrieved document chunks and useful metadata
+    are included.
+    """
+
+    documents = results.get("documents", [[]])[0]
+    metadatas = results.get("metadatas", [[]])[0]
+    distances = results.get("distances", [[]])[0]
+
+    if not documents:
+        return ""
+
+    context_parts = []
+
+    for index, document in enumerate(documents):
+
+        metadata = (
+            metadatas[index]
+            if index < len(metadatas)
+            else {}
+        )
+
+        distance = (
+            distances[index]
+            if index < len(distances)
+            else None
+        )
+
+        # Use the metadata fields that exist in your ChromaDB.
+        # If a field doesn't exist, it will simply be "Unknown".
+        source = metadata.get(
+            "source",
+            metadata.get("file_path", "Unknown")
+        )
+
+        title = metadata.get("title", "")
+        section = metadata.get("section", "")
+        subsection = metadata.get("Subsection", "")
+
+        context_parts.append(
+            f"""
+--- POLICY CHUNK {index + 1} ---
+
+Source: {source}
+Title: {title}
+Section: {section}
+Subsection: {subsection}
+Distance: {distance}
+
+Content:
+{document}
+"""
+        )
+
+    return "\n".join(context_parts)
+
+
+def search_and_build_context(
+    query: str,
+    n_results: int = 5,
+) -> str:
+    """
+    Convenience function that:
+    1. Searches ChromaDB.
+    2. Converts results into LLM-ready context.
+
+    Args:
+        query: User's question.
+        n_results: Number of chunks to retrieve.
+
+    Returns:
+        Formatted policy context string.
+    """
+
+    results = search_chromadb(
+        query=query,
+        n_results=n_results,
+    )
+
+    return build_rag_context(results)
+
+
+def print_search_results(results: dict[str, Any]) -> None:
+    """
+    Print chunks retrieved from ChromaDB.
+    """
+
+    ids = results.get("ids", [[]])[0]
+    documents = results.get("documents", [[]])[0]
+    metadatas = results.get("metadatas", [[]])[0]
+    distances = results.get("distances", [[]])[0]
+
+    print("\n" + "=" * 100)
+    print("                    CHROMADB SEARCH RESULTS")
+    print("=" * 100)
+
+    print(f"Results found: {len(ids)}")
+
+    for index, record_id in enumerate(ids):
+
+        print("\n" + "-" * 100)
+        print(f"Result #{index + 1}")
+        print(f"ID: {record_id}")
+
+        if distances:
+            print(f"Distance: {distances[index]}")
+
+        if metadatas:
+            print(f"Metadata: {metadatas[index]}")
+
+        print("\nContent:")
+        print(documents[index])
+
+    print("\n" + "=" * 100)
+	
+	
+	
+	Your original semantic-search implementation is retained here; the new part is build_rag_context() / search_and_build_context(). Your original code already queries ChromaDB with documents, metadatas, and distances.
+	
+-------------------------------------------------
+
+2. openai_client.py
+
+Here I'm preserving your existing compact_messages() and chunk_file() functionality.
+
+The important modification is openai_chat() now accepts:
+
+rag_context
+
+and puts the retrieved policy information into the request sent to GPT.
+
+import json
+  section/subsection.
+
+
+Important rules:
+
+
+1. Preserve the original meaning and information.
+2. Do NOT summarize the content.
+3. Do NOT remove important information.
+4. Do NOT invent information.
+5. Keep related paragraphs together.
+6. Use the document's existing headings when possible.
+7. If headings do not exist, infer reasonable
+   section/subsection names from the content.
+8. Id must start at 1 and increment sequentially.
+9. Return ONLY valid JSON.
+10. Return a JSON object with exactly one key, `chunks`,
+    whose value is the array of chunk objects.
+"""
+
+
+    user_prompt = f"""
+Chunk the following document:
+
+
+---------------- DOCUMENT START ----------------
+
+
+{file_content}
+
+
+---------------- DOCUMENT END ----------------
+"""
+
+
+    request_body = {
+        "model": "gpt-5-mini",
+        "messages": [
+            {
+                "role": "system",
+                "content": system_prompt,
+            },
+            {
+                "role": "user",
+                "content": user_prompt,
+            },
+        ],
+        "response_format": {
+            "type": "json_object"
+        },
+    }
+
+
+    response = httpx.post(
+        "https://api.openai.com/v1/chat/completions",
+        headers={
+            "Authorization": f"Bearer {api_key}",
+            "Content-Type": "application/json",
+        },
+        json=request_body,
+        timeout=120,
+    )
+
+
+    if response.status_code != 200:
+        raise RuntimeError(
+            f"Error calling OpenAI API: "
+            f"{response.status_code} - "
+            f"{response.text}"
+        )
+
+
+    response_json = response.json()
+
+
+    content = response_json["choices"][0]["message"]["content"]
+
+
+    try:
+        result = json.loads(content)
+
+
+    except json.JSONDecodeError as e:
+        raise RuntimeError(
+            f"OpenAI returned invalid JSON: {e}\n"
+            f"Response: {content}"
+        )
+
+
+    if (
+        not isinstance(result, dict)
+        or not isinstance(result.get("chunks"), list)
+    ):
+        raise RuntimeError(
+            "Unexpected OpenAI response format. "
+            "Expected an object with a 'chunks' array, "
+            f"received: {result}"
+        )
+
+
+    return result["chunks"]
+
+The existing chunk_file() behavior is preserved from your uploaded file
+
+------------------------------------------------------------
+
+
+import os
+import sys
+from typing import Optional
+from uuid import UUID
+
+SERVER_DIR = os.path.dirname(os.path.abspath(__file__))
+
+if SERVER_DIR not in sys.path:
+    sys.path.insert(0, SERVER_DIR)
+
+from database.models import (
+    ChatCompaction,
+    ChatMessage,
+    ChatSession,
+    User,
+)
+
+from fastapi import FastAPI, HTTPException, Request
+
+from database.db import (
+    create_db_and_tables,
+    insert_chat_compaction,
+    insert_chat_message,
+    insert_chat_session,
+    insert_user,
+    recalculate_chat_session_sizes,
+    select_all_chat_messages_for_session_id,
+    select_all_chat_sessions_for_userid,
+    select_chat_session_by_id,
+    select_latest_chat_compaction_for_session_id,
+    select_user_by_id,
+    update_chat_session_size,
+    select_chat_messages_for_session_id_after,
+)
+
+from openai_client import (
+    compact_messages,
+    openai_chat,
+)
+
+# NEW: RAG functionality
+from query import search_chromadb, build_rag_context
+
+import uvicorn
+
+from fastapi.templating import Jinja2Templates
+
+
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+
+templates = Jinja2Templates(
+    directory=os.path.join(BASE_DIR, "templates")
+)
+
+app = FastAPI()
+
+create_db_and_tables()
+
+
+# ============================================================
+# ROOT
+# ============================================================
+
+@app.get("/")
+def root(request: Request):
+    return templates.TemplateResponse(
+        request,
+        "chat.html"
+    )
+
+
+# ============================================================
+# HEALTH
+# ============================================================
+
+@app.get("/health")
+def health():
+    return {"status": "healthy"}
+
+
+# ============================================================
+# USERS
+# ============================================================
+
+@app.post("/users", status_code=201)
+def create_user(user: User):
+
+    user.name = user.name.strip()
+
+    if not user.name:
+        raise HTTPException(
+            status_code=422,
+            detail="Name cannot be empty"
+        )
+
+    insert_user(user)
+
+    return {
+        "id": str(user.id),
+        "name": user.name
+    }
+
+
+# ============================================================
+# USER SESSIONS
+# ============================================================
+
+@app.get("/users/{user_id}/sessions")
+def get_user_sessions(user_id: UUID):
+
+    user = select_user_by_id(user_id)
+
+    if not user:
+        raise HTTPException(
+            status_code=404,
+            detail="Invalid user id"
+        )
+
+    sessions = select_all_chat_sessions_for_userid(
+        user_id
+    )
+
+    return [
+        {
+            "id": str(session.id),
+            "title": session.session_title,
+            "created_at": session.created_at,
+        }
+        for session in sessions
+    ]
+
+
+# ============================================================
+# SESSION MESSAGES
+# ============================================================
+
+@app.get("/sessions/{session_id}/messages")
+def get_session_messages(
+    session_id: UUID,
+    user_id: UUID
+):
+
+    chat_session = select_chat_session_by_id(
+        session_id
+    )
+
+    if (
+        not chat_session
+        or chat_session.user_id != user_id
+    ):
+        raise HTTPException(
+            status_code=404,
+            detail="Chat session not found"
+        )
+
+    messages = select_all_chat_messages_for_session_id(
+        session_id
+    )
+
+    return [
+        {
+            "id": str(message.id),
+            "message": message.message,
+            "role": message.role,
+            "created_at": message.created_at,
+        }
+        for message in messages
+    ]
+
+
+# ============================================================
+# COMPACT CHAT
+# ============================================================
+
+@app.post("/compact")
+def compact_chat_messages(
+    session_id: UUID
+):
+    """
+    Compact messages for a given session.
+    """
+
+    chat_session = select_chat_session_by_id(
+        session_id
+    )
+
+    if not chat_session:
+        raise HTTPException(
+            status_code=404,
+            detail="Chat session not found"
+        )
+
+    messages = select_all_chat_messages_for_session_id(
+        session_id
+    )
+
+    if not messages:
+        raise HTTPException(
+            status_code=404,
+            detail="No messages found for this session"
+        )
+
+    compacted_message = compact_messages(
+        messages
+    )
+
+    compaction_record = insert_chat_compaction(
+        ChatCompaction(
+            session_id=chat_session.id,
+            compacted_message=compacted_message,
+        )
+    )
+
+    total_size = len(compacted_message)
+
+    update_chat_session_size(
+        session_id,
+        total_size
+    )
+
+    return {
+        "compacted_message": compacted_message,
+        "compaction_id": str(compaction_record.id),
+        "total_size": total_size,
+    }
+
+
+# ============================================================
+# RAG HELPER
+# ============================================================
+
+def retrieve_policy_context(
+    message: str,
+    n_results: int = 5,
+) -> str:
+    """
+    Search ChromaDB for policy chunks relevant to
+    the user's current question.
+
+    Returns formatted text context for the LLM.
+    """
+
+    print("\n========================================")
+    print("RAG SEARCH")
+    print("========================================")
+    print(f"Question: {message}")
+    print(f"Retrieving top {n_results} chunks...")
+
+    results = search_chromadb(
+        query=message,
+        n_results=n_results,
+    )
+
+    # Optional debugging
+    ids = results.get("ids", [[]])[0]
+    distances = results.get("distances", [[]])[0]
+
+    print(f"Chunks retrieved: {len(ids)}")
+
+    for index, record_id in enumerate(ids):
+        distance = (
+            distances[index]
+            if index < len(distances)
+            else None
+        )
+
+        print(
+            f"  {index + 1}. "
+            f"ID={record_id}, "
+            f"distance={distance}"
+        )
+
+    rag_context = build_rag_context(
+        results
+    )
+
+    print("RAG context created.")
+    print("========================================\n")
+
+    return rag_context
+
+
+# ============================================================
+# CHAT
+# ============================================================
+
+@app.post("/chat")
+def chat_endpoint(
+    message: Optional[str] = None,
+    user_id: Optional[str] = None,
+    session_id: Optional[str] = None,
+    chat_title: Optional[str] = None,
+):
+
+    print("chat_endpoint entered")
+
+    # ========================================================
+    # NEW CHAT SESSION
+    # ========================================================
+
+    if not session_id:
+
+        if not user_id:
+            raise HTTPException(
+                status_code=400,
+                detail=(
+                    "user_id is required to create "
+                    "a chat session"
+                )
+            )
+
+        try:
+            user_uuid = UUID(user_id)
+
+        except (TypeError, ValueError):
+            raise HTTPException(
+                status_code=400,
+                detail="Invalid user id"
+            )
+
+        if not select_user_by_id(user_uuid):
+            raise HTTPException(
+                status_code=404,
+                detail="Invalid user id"
+            )
+
+        title = (
+            chat_title.strip()
+            if chat_title
+            else ""
+        ).strip()
+
+        if (
+            not title
+            and message
+            and message.strip()
+        ):
+            title = message.strip()
+
+        # When the UI sends the first message,
+        # use that message as the initial session title.
+        if not title:
+            title = "New chat"
+
+        # Create new session
+        session = insert_chat_session(
+            chat_session=ChatSession(
+                user_id=UUID(user_id),
+                session_title=title[:100]
+            )
+        )
+
+        # Calling /chat without a message starts
+        # an empty chat session.
+        if not message or not message.strip():
+            return {
+                "session_id": session.id
+            }
+
+        # ====================================================
+        # RAG SEARCH
+        # ====================================================
+
+        rag_context = retrieve_policy_context(
+            message,
+            n_results=5,
+        )
+
+        # ====================================================
+        # CALL LLM
+        # ====================================================
+
+        response = openai_chat(
+            message,
+            rag_context=rag_context,
+        )
+
+        # ====================================================
+        # SAVE USER MESSAGE
+        # ====================================================
+
+        insert_chat_message(
+            chat_message=ChatMessage(
+                message=message,
+                role="user",
+                session_id=session.id,
+                user_id=session.user_id,
+                size=len(message),
+            )
+        )
+
+        # ====================================================
+        # SAVE ASSISTANT MESSAGE
+        # ====================================================
+
+        insert_chat_message(
+            chat_message=ChatMessage(
+                message=response,
+                role="assistant",
+                session_id=session.id,
+                user_id=session.user_id,
+                size=len(response),
+            )
+        )
+
+        # ====================================================
+        # SESSION SIZE
+        # ====================================================
+
+        session_size = recalculate_chat_session_sizes(
+            session.id
+        )
+
+        if session_size > 1000:
+            return {
+                "response": (
+                    "Chat session size exceeds limit. "
+                    "Please compress the chat"
+                ),
+                "session_id": session.id,
+            }
+
+        return {
+            "response": response,
+            "session_id": session.id,
+        }
+
+    # ========================================================
+    # EXISTING CHAT SESSION
+    # ========================================================
+
+    if not message or not message.strip():
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                "message is required for an "
+                "existing chat session"
+            )
+        )
+
+    try:
+        sid = UUID(session_id)
+
+    except (TypeError, ValueError):
+        raise HTTPException(
+            status_code=400,
+            detail="Invalid session id"
+        )
+
+    chat_session = select_chat_session_by_id(
+        session_id=sid
+    )
+
+    if not chat_session:
+        raise HTTPException(
+            status_code=404,
+            detail="Chat session not found"
+        )
+
+    # ========================================================
+    # RAG SEARCH
+    #
+    # IMPORTANT:
+    # This happens for EVERY user question.
+    # ========================================================
+
+    rag_context = retrieve_policy_context(
+        message,
+        n_results=5,
+    )
+
+    # ========================================================
+    # GET CONVERSATION HISTORY / COMPACTION
+    # ========================================================
+
+    latest_compaction = (
+        select_latest_chat_compaction_for_session_id(
+            sid
+        )
+    )
+
+    if latest_compaction:
+
+        messages = (
+            select_chat_messages_for_session_id_after(
+                sid,
+                latest_compaction.created_at
+            )
+        )
+
+        response = openai_chat(
+            message,
+            history=messages,
+            compacted_message=(
+                latest_compaction.compacted_message
+            ),
+            rag_context=rag_context,
+        )
+
+    else:
+
+        messages = (
+            select_all_chat_messages_for_session_id(
+                session_id=sid
+            )
+        )
+
+        response = openai_chat(
+            message,
+            history=messages,
+            rag_context=rag_context,
+        )
+
+    # ========================================================
+    # SAVE USER MESSAGE
+    # ========================================================
+
+    insert_chat_message(
+        chat_message=ChatMessage(
+            message=message,
+            role="user",
+            session_id=sid,
+            user_id=chat_session.user_id,
+            size=len(message),
+        )
+    )
+
+    # ========================================================
+    # SAVE ASSISTANT RESPONSE
+    # ========================================================
+
+    insert_chat_message(
+        chat_message=ChatMessage(
+            message=response,
+            role="assistant",
+            session_id=sid,
+            user_id=chat_session.user_id,
+            size=len(response),
+        )
+    )
+
+    # ========================================================
+    # SESSION SIZE
+    # ========================================================
+
+    session_size = recalculate_chat_session_sizes(
+        sid
+    )
+
+    if session_size > 1000:
+        return {
+            "response": (
+                "Chat session size exceeds limit. "
+                "Please compress the chat"
+            ),
+            "session_id": sid,
+        }
+
+    return {
+        "response": response,
+        "session_id": session_id,
+    }
+
+
+# ============================================================
+# RUN SERVER
+# ============================================================
+
+if __name__ == "__main__":
+    uvicorn.run(
+        "server:app",
+        host="0.0.0.0",
+        port=8000,
+        reload=True,
+    )

@@ -139,3 +139,8 @@ websocket-client==1.9.0
 widgetsnbextension==4.0.15
 sqlmodel== 0.0.24
 pytest
+chromadb
+sentence-transformers
+rank-bm25
+mcp
+fastmcp

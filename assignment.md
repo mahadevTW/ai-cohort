@@ -18,3 +18,13 @@
 6. Rest api all methods - GET put, POST
 7. how to call other modules
 6. SQL queries
+
+23 Aug
+-Refinement of chunking strategy should be assignement
+-Optional - Also image embeding
+
+6 Sept
+Integrate tool calling agent into chant 
+usemax attempt
+keep sending response back to consumer what agent is doing
+Semantic  / RAG search exposed as tool whether LLM can decide whether to do semantic search or RAG execution
