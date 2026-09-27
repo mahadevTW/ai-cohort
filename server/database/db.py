@@ -2,8 +2,8 @@ import os
 from datetime import datetime
 
 from requests import session
-from sqlmodel import UUID, Session, create_engine, select
-from sqlmodel import SQLModel, create_engine
+from sqlmodel import UUID, Session, create_engine, inspect, select
+from sqlmodel import SQLModel
 from database.models import User, ChatSession, ChatMessage, CompactionResult
 # db_file = "data/database.db"
 # db_url = f"sqlite:///{db_file}"
@@ -21,6 +21,10 @@ session_engine = create_engine(
 
 def create_db_and_tables():
     SQLModel.metadata.create_all(session_engine)
+    columns = {column["name"] for column in inspect(session_engine).get_columns("chat_message")}
+    if "tool_name" not in columns:
+        with session_engine.begin() as connection:
+            connection.exec_driver_sql("ALTER TABLE chat_message ADD COLUMN tool_name VARCHAR")
 
 def insert_user(user: User):
     with Session(session_engine) as session:

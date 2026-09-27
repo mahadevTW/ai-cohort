@@ -1,14 +1,6 @@
-from dotenv import load_dotenv
-from openai import OpenAI
 import os
-import json
 from datetime import datetime
-import time
-
 import requests
-load_dotenv()
-OPENAI_KEY = os.getenv("OPENAI_API_KEY")
-client = OpenAI(api_key=OPENAI_KEY)
 
 def get_todays_date():
     now = datetime.now()
@@ -19,7 +11,6 @@ def get_todays_date():
 def get_lat_long(city_name: str):
 
     print(f"************ Pulling latitude and logitude for city: {city_name} \n")
-    time.sleep(5)  # Simulate a delay for the API call
     url = "https://geocoding-api.open-meteo.com/v1/search"
 
     params = {
@@ -29,7 +20,7 @@ def get_lat_long(city_name: str):
         "format": "json"
     }
 
-    response = requests.get(url, params=params)
+    response = requests.get(url, params=params, timeout=float(os.getenv("WEATHER_HTTP_TIMEOUT", "10")))
 
     response.raise_for_status()
 
@@ -56,7 +47,6 @@ def get_wether_by_lat_long(latitude: str, longitude: str):
     # The city is supplied by the model from the user's message.
 
     print(f"************ Pulling weather data for: {latitude}, {longitude} \n")
-    time.sleep(5)  # Simulate a delay for the API call
     url = "https://api.open-meteo.com/v1/forecast"
 
     params = {
@@ -82,7 +72,7 @@ def get_wether_by_lat_long(latitude: str, longitude: str):
     response_wth = requests.get(
         url,
         params=params,
-        timeout=10
+        timeout=float(os.getenv("WEATHER_HTTP_TIMEOUT", "10"))
     )
 
     response_wth.raise_for_status()
@@ -144,80 +134,3 @@ tools = [
             }
         }
 ]
-
-def ask_llm(question: str):
-    messages = [
-        {
-            "role": "user",
-            "content": question
-        }
-    ]
-
-
-    while True:
-    
-        print(f"Before 1st call LLM: {messages}\n")
-        response = client.chat.completions.create(
-                    model="gpt-4o-mini",
-                    messages=messages,
-                    # passing body part along query to brain saying that you can use body parts based on need
-                    tools=tools
-                )
-        print(f"1st Response from LLM: {response.choices[0]}\n")
-        # detect if tool call is being suggested by llm
-        tool_calls = response.choices[0].message.tool_calls or []
-        if tool_calls:
-            # execute the tool call
-            tool_call = tool_calls[0]
-            tool_name = tool_call.function.name
-            tool_call_id = tool_call.id
-            tool_args = json.loads(tool_call.function.arguments or "{}")
-            messages.append({
-            "role":"assistant",
-            "tool_calls":[
-                    {
-                        "id":tool_call_id,
-                        "type":"function",
-                        "function":{
-                            "name":tool_name,
-                            "arguments": tool_call.function.arguments
-                        }
-                    }
-                ]
-            })
-            print(f"tool call is recommened by llm  {tool_name}\n")
-            if tool_name=="get_date_time":
-                tool_result = get_todays_date()
-                tool_content = tool_result
-            elif tool_name=="get_lat_long_for_city":
-                city = tool_args["city"]
-                tool_result = get_lat_long(city)
-                tool_content = json.dumps(tool_result)
-            elif tool_name=="get_wether_by_lat_long":
-                latitude = tool_args["latitude"]
-                longitude = tool_args["longitude"]
-                tool_result = get_wether_by_lat_long(latitude, longitude)
-                tool_content = json.dumps(tool_result)
-            else:
-                tool_content = json.dumps({"error": f"Unknown tool: {tool_name}"})
-
-            message_with_tool = {
-                "role":"tool",
-                "tool_call_id":tool_call_id,
-                "content":tool_content
-            }
-            messages.append(message_with_tool)
-            response = client.chat.completions.create(
-                    model="gpt-4o-mini",
-                    messages=messages,
-                    # passing body part along query to brain saying that you can use body parts based on need
-                    tools=tools
-                )
-            print(f"Final Response from LLM: {response.choices[0].message.content}")
-            
-        else:
-            print(f"Final Response from LLM ELSE: {response.choices[0].message.content}")
-            break
-
-
-ask_llm("Will it rain in Pune tomorrow?")

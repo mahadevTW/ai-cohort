@@ -201,6 +201,14 @@
             border: 1px solid var(--grid-line);
             border-bottom-left-radius: 3px;
         }
+        .msg-status {
+            background: transparent;
+            border: 0;
+            color: var(--text-muted);
+            font-size: 13px;
+            font-style: italic;
+            padding: 4px 2px;
+        }
 
         #inputBar {
             display: flex;
@@ -498,6 +506,12 @@ function addMessage(text, isUser) {
     return row;
 }
 
+function addStatus(text) {
+    const row = addMessage("⏳ " + text, false);
+    row.querySelector(".msg-bubble").classList.add("msg-status");
+    return row;
+}
+
 async function selectSession(sessionId) {
     state.currentSessionId = sessionId;
     renderSidebar();
@@ -610,14 +624,16 @@ async function sendMessage(messageOverride = null, alreadyDisplayed = false) {
 
         const response = await fetch("/chat?" + params.toString(), {
             method: "POST",
-            headers: { "accept": "application/json" }
+            headers: { "accept": "text/event-stream" }
         });
 
-        const data = await response.json();
-        if (response.status === 409 && data.detail?.error_code === "SESSION_SIZE_EXCEEDED") {
-            typingRow.remove();
-            showSessionLimitDialog(message);
-            return;
+        if (response.status === 409) {
+            const data = await response.json();
+            if (data.detail?.error_code === "SESSION_SIZE_EXCEEDED") {
+                typingRow.remove();
+                showSessionLimitDialog(message);
+                return;
+            }
         }
 
         if (!response.ok) {
@@ -625,9 +641,42 @@ async function sendMessage(messageOverride = null, alreadyDisplayed = false) {
         }
 
         typingRow.remove();
-        addMessage(data.response || "No response received.", false);
+        const reader = response.body.getReader();
+        const decoder = new TextDecoder();
+        let buffer = "";
+        let finalReceived = false;
 
-        state.currentSessionId = data.session_id;
+        const handleEvent = (payload) => {
+            if (payload.type === "session") {
+                state.currentSessionId = payload.session_id;
+            } else if (payload.type === "status") {
+                addStatus(payload.message);
+            } else if (payload.type === "message") {
+                addMessage(payload.content || "No response received.", false);
+                finalReceived = true;
+            } else if (payload.type === "error") {
+                addMessage(payload.message || "I couldn't complete that request.", false);
+                finalReceived = true;
+            }
+        };
+
+        while (true) {
+            const { value, done } = await reader.read();
+            buffer += decoder.decode(value || new Uint8Array(), { stream: !done });
+            const events = buffer.split("\n\n");
+            buffer = events.pop();
+            events.forEach(eventText => {
+                const dataLine = eventText.split("\n").find(line => line.startsWith("data: "));
+                if (!dataLine) return;
+                try { handleEvent(JSON.parse(dataLine.slice(6))); }
+                catch (err) { console.error("Invalid stream event", err); }
+            });
+            if (done) break;
+        }
+
+        if (!finalReceived) {
+            addMessage("I couldn't complete that request. Please try again.", false);
+        }
 
         if (isNewSession) {
             state.sessions = await fetchSessions(state.userId);

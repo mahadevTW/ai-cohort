@@ -38,6 +38,7 @@ class ChatMessage(SQLModel, table=True):
     message: str
     session_id: UUID = Field(foreign_key="chat_session.id")
     role: MessageRole
+    tool_name: Optional[str] = Field(default=None)
     created_at: datetime = Field(default_factory=datetime.now)
     size: Optional[int] = Field(default=0)
 

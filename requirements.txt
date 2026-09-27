@@ -2,6 +2,7 @@ fastapi==0.137.2
 uvicorn==0.49.0
 jupyter==1.1.1
 openai==2.43.0
+fastmcp>=2.0.0
 pandas==3.0.3
 requests==2.34.2
 sqlmodel==0.0.24
