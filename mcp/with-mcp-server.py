@@ -4,7 +4,9 @@ import asyncio
 import json
 import uvicorn
 
-OPENAI_API_KEY="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"
+load_dotenv()
+
+OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 MCP_SERVER_URL = "https://leverage-boogieman-shine.ngrok-free.dev/mcp"
 
 client = OpenAI(api_key=OPENAI_API_KEY)

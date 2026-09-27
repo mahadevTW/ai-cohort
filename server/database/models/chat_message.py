@@ -20,6 +20,7 @@ class ChatMessage(SQLModel, table=True):
 
     size_of_message: int | None = None
     role: MessageRole
+    tool_name: str | None = None
 
     timestamp: datetime = Field(
         default_factory=lambda: datetime.now(timezone.utc)

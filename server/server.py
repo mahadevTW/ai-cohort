@@ -7,7 +7,6 @@ from fastapi.templating import Jinja2Templates
 from dotenv import load_dotenv
 import uvicorn
 from openai_client import openai_chat, compact_chat_history
-from rag.embed import get_rag_context
 from database.repository import (
     create_db_and_tables,
     get_compaction_result_for_session,
@@ -33,6 +32,21 @@ BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
 templates = Jinja2Templates(directory=os.path.join(BASE_DIR, "templates"))
 app = FastAPI()
+
+
+def _persist_tool_events(session_id: UUID, tool_events: list[dict]):
+    for event in tool_events:
+        insert_chat_message(
+            ChatMessage(
+                message=event["content"],
+                session_id=session_id,
+                role="assistant",
+                tool_name=event["tool_name"],
+            )
+        )
+        update_session_size(session_id, event["content"])
+
+
 @app.get("/")
 def root(request: Request):
     return templates.TemplateResponse(request, "chat.html")
@@ -64,7 +78,7 @@ def do_compact(session_id:str):
 
 # accept session id as query parameter and return all messages for that session
 @app.post("/chat")
-def chat_endpoint(message: str, user_id:str, session_id: Optional[str] = None):
+async def chat_endpoint(message: str, user_id:str, session_id: Optional[str] = None):
     # check if session id exist
     # Not exists : if not create session into db and make api call to llm with current message
     # Exists : pull all messages from db for current session and make llm api call along with history of message
@@ -75,14 +89,13 @@ def chat_endpoint(message: str, user_id:str, session_id: Optional[str] = None):
     if session_size > int(os.getenv("MAX_COMPACTION_SIZE")):
         raise HTTPException(status_code=400, detail="Session size exceeds compaction limit")
 
-    rag_context = get_rag_context(message)
-
     if not session_id:
         # create session
         session = insert_chat_session(ChatSession(user_id=UUID(user_id), session_title=message))
-        response = openai_chat(message, rag_context=rag_context)
+        response, tool_events = await openai_chat(message)
         insert_chat_message(ChatMessage(message=message, session_id=session.id, role="user"))
         update_session_size(session.id, message)
+        _persist_tool_events(session.id, tool_events)
         insert_chat_message(ChatMessage(message=response, session_id=session.id, role="assistant"))
         update_session_size(session.id, response)
         return {"response": response, "session_id": session.id}
@@ -90,19 +103,21 @@ def chat_endpoint(message: str, user_id:str, session_id: Optional[str] = None):
     compaction_result=get_compaction_result_for_session(sid)
     if(compaction_result and compaction_result.size_of_compact>0):
         messages = select_all_messages_for_session_id_after_timestamp(session_id=sid, timestamp=compaction_result.created_at)
-        response = openai_chat(message, history=messages, compaction_result=compaction_result.compact_result, rag_context=rag_context)
+        response, tool_events = await openai_chat(message, history=messages, compaction_result=compaction_result.compact_result)
         # save original message into db and save chat response into db
         insert_chat_message(ChatMessage(message=message, session_id=sid, role="user"))
         update_session_size(sid, message)
+        _persist_tool_events(sid, tool_events)
         insert_chat_message(ChatMessage(message=response, session_id=sid, role="assistant"))
         update_session_size(sid, response)
         return {"response": response, "session_id": session_id}
     else:
         messages = select_all_chat_messages_for_session_id(session_id=sid)
-        response = openai_chat(message, history=messages, rag_context=rag_context)
+        response, tool_events = await openai_chat(message, history=messages)
         # save original message into db and save chat response into db
         insert_chat_message(ChatMessage(message=message, session_id=sid, role="user"))
         update_session_size(sid, message)
+        _persist_tool_events(sid, tool_events)
         insert_chat_message(ChatMessage(message=response, session_id=sid, role="assistant"))
         update_session_size(sid, response)
         return {"response": response, "session_id": session_id}

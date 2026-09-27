@@ -1,6 +1,7 @@
 import os
 from uuid import UUID
 
+from sqlalchemy import inspect, text
 from sqlmodel import SQLModel, Session, create_engine, select
 
 from database.models.user import User
@@ -22,6 +23,26 @@ session_engine = create_engine(
 
 def create_db_and_tables():
     SQLModel.metadata.create_all(session_engine)
+    _ensure_chat_message_tool_name_column()
+
+
+def _ensure_chat_message_tool_name_column():
+    # SQLModel.metadata.create_all only creates missing tables, it doesn't add
+    # columns to a table that already exists on disk - do that by hand so
+    # older chat_messages.db files pick up the new column.
+    inspector = inspect(session_engine)
+    if "chat_messages" not in inspector.get_table_names():
+        return
+    columns = {col["name"] for col in inspector.get_columns("chat_messages")}
+    if "tool_name" not in columns:
+        with session_engine.begin() as conn:
+            conn.execute(text("ALTER TABLE chat_messages ADD COLUMN tool_name VARCHAR"))
+
+
+# uvicorn's reload=True re-imports this module in each fresh worker process
+# without re-running server.py's `if __name__ == "__main__"` guard, so the
+# schema check has to happen at import time to reliably self-heal.
+create_db_and_tables()
 
 
 # -----------------------------

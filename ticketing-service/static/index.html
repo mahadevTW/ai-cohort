@@ -1,0 +1,265 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Ticketing Service</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%234f46e5'/%3E%3Cpath d='M9 16.5l4.5 4.5L23 11' stroke='white' stroke-width='3' fill='none' stroke-linecap='round'/%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #f6f7f9; --surface: #ffffff; --border: #e4e7ec; --text: #101828; --muted: #667085;
+    --accent: #4f46e5; --accent-hover: #4338ca; --accent-soft: #eef2ff;
+    --open: #2563eb; --in_progress: #d97706; --resolved: #059669; --closed: #6b7280;
+    --low: #6b7280; --medium: #2563eb; --high: #ea580c; --urgent: #dc2626;
+    --shadow: 0 1px 2px rgba(16,24,40,.06), 0 1px 3px rgba(16,24,40,.1);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #0b0d12; --surface: #151821; --border: #262a36; --text: #eceef3; --muted: #9aa1b2;
+      --accent: #6366f1; --accent-hover: #818cf8; --accent-soft: #1e1f3b;
+      --shadow: 0 1px 3px rgba(0,0,0,.5);
+    }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; font-family: Inter, system-ui, sans-serif; background: var(--bg); color: var(--text); font-size: 14px; }
+  header { background: var(--surface); border-bottom: 1px solid var(--border); }
+  .wrap { max-width: 1100px; margin: 0 auto; padding: 0 20px; }
+  .topbar { display: flex; align-items: center; justify-content: space-between; height: 64px; }
+  .brand { display: flex; align-items: center; gap: 10px; font-weight: 700; font-size: 16px; }
+  .logo { width: 30px; height: 30px; border-radius: 8px; background: var(--accent); color: #fff; display: grid; place-items: center; font-size: 15px; }
+  button { font: inherit; cursor: pointer; border-radius: 8px; border: 1px solid var(--border); background: var(--surface); color: var(--text); padding: 8px 14px; font-weight: 500; transition: background .15s, transform .05s; }
+  button:active { transform: scale(.97); }
+  button.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+  button.primary:hover { background: var(--accent-hover); }
+  button.danger { color: var(--urgent); }
+  main.wrap { padding-top: 24px; padding-bottom: 48px; }
+  .stats { display: grid; grid-template-columns: repeat(5, 1fr); gap: 12px; margin-bottom: 20px; }
+  .stat { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 14px 16px; box-shadow: var(--shadow); cursor: pointer; }
+  .stat.active { outline: 2px solid var(--accent); }
+  .stat .label { color: var(--muted); font-size: 12px; font-weight: 500; text-transform: uppercase; letter-spacing: .04em; }
+  .stat .value { font-size: 24px; font-weight: 700; margin-top: 4px; }
+  .toolbar { display: flex; gap: 10px; margin-bottom: 14px; flex-wrap: wrap; }
+  input, select, textarea { font: inherit; color: var(--text); background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 8px 10px; }
+  input:focus, select:focus, textarea:focus { outline: 2px solid var(--accent-soft); border-color: var(--accent); }
+  .toolbar input { flex: 1; min-width: 180px; }
+  .card { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; box-shadow: var(--shadow); overflow-x: auto; }
+  table { width: 100%; border-collapse: collapse; }
+  th { text-align: left; font-size: 12px; font-weight: 600; color: var(--muted); padding: 10px 16px; border-bottom: 1px solid var(--border); background: var(--bg); }
+  td { padding: 12px 16px; border-bottom: 1px solid var(--border); vertical-align: middle; }
+  tr:last-child td { border-bottom: 0; }
+  tbody tr { cursor: pointer; }
+  tbody tr:hover { background: var(--accent-soft); }
+  .id { color: var(--muted); font-variant-numeric: tabular-nums; width: 60px; }
+  .title { font-weight: 600; }
+  .desc { color: var(--muted); font-size: 13px; margin-top: 2px; max-width: 460px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .pill { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 500; padding: 3px 10px; border-radius: 999px; background: color-mix(in srgb, var(--c) 12%, transparent); color: var(--c); white-space: nowrap; }
+  .pill::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: var(--c); }
+  .muted { color: var(--muted); }
+  .empty { padding: 48px; text-align: center; color: var(--muted); }
+  dialog { border: 1px solid var(--border); border-radius: 14px; padding: 0; width: min(520px, calc(100vw - 32px)); background: var(--surface); color: var(--text); box-shadow: 0 20px 50px rgba(0,0,0,.25); }
+  dialog::backdrop { background: rgba(15,17,25,.45); backdrop-filter: blur(2px); }
+  dialog form { padding: 22px; display: grid; gap: 14px; }
+  dialog h2 { margin: 0; font-size: 18px; }
+  label { display: grid; gap: 6px; font-weight: 500; font-size: 13px; }
+  textarea { min-height: 100px; resize: vertical; }
+  .row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  .actions { display: flex; justify-content: space-between; gap: 8px; margin-top: 4px; }
+  .actions .right { display: flex; gap: 8px; margin-left: auto; }
+  .meta { font-size: 12px; color: var(--muted); }
+  .toast { position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%); background: var(--text); color: var(--bg); padding: 10px 16px; border-radius: 8px; font-weight: 500; opacity: 0; transition: opacity .2s; pointer-events: none; }
+  .toast.show { opacity: 1; }
+  @media (max-width: 720px) {
+    .stats { grid-template-columns: repeat(3, 1fr); }
+    .stat .value { font-size: 20px; }
+    td, th { padding: 10px 12px; }
+    .toolbar select { flex: 1; }
+    .hide-sm { display: none; }
+    .row { grid-template-columns: 1fr; }
+  }
+</style>
+</head>
+<body>
+<header>
+  <div class="wrap topbar">
+    <div class="brand"><div class="logo">✓</div> Ticketing Service</div>
+    <button class="primary" id="newBtn">+ New ticket</button>
+  </div>
+</header>
+
+<main class="wrap">
+  <section class="stats" id="stats"></section>
+
+  <div class="toolbar">
+    <input id="search" type="search" placeholder="Search tickets…">
+    <select id="fStatus">
+      <option value="">All statuses</option>
+      <option value="open">Open</option>
+      <option value="in_progress">In progress</option>
+      <option value="resolved">Resolved</option>
+      <option value="closed">Closed</option>
+    </select>
+    <select id="fPriority">
+      <option value="">All priorities</option>
+      <option value="urgent">Urgent</option>
+      <option value="high">High</option>
+      <option value="medium">Medium</option>
+      <option value="low">Low</option>
+    </select>
+  </div>
+
+  <div class="card">
+    <table>
+      <thead><tr><th>#</th><th>Ticket</th><th>Status</th><th>Priority</th><th class="hide-sm">Assignee</th><th class="hide-sm">Updated</th></tr></thead>
+      <tbody id="rows"></tbody>
+    </table>
+    <div class="empty" id="empty" hidden>No tickets yet. Create one to get started.</div>
+  </div>
+</main>
+
+<dialog id="dlg">
+  <form id="form" method="dialog">
+    <h2 id="dlgTitle">New ticket</h2>
+    <label>Title <input name="title" required maxlength="200" placeholder="Short summary"></label>
+    <label>Description <textarea name="description" placeholder="What's going on?"></textarea></label>
+    <div class="row">
+      <label id="statusField">Status
+        <select name="status">
+          <option value="open">Open</option>
+          <option value="in_progress">In progress</option>
+          <option value="resolved">Resolved</option>
+          <option value="closed">Closed</option>
+        </select>
+      </label>
+      <label>Priority
+        <select name="priority">
+          <option value="low">Low</option>
+          <option value="medium" selected>Medium</option>
+          <option value="high">High</option>
+          <option value="urgent">Urgent</option>
+        </select>
+      </label>
+    </div>
+    <label>Assignee <input name="assignee" placeholder="Unassigned"></label>
+    <div class="meta" id="meta"></div>
+    <div class="actions">
+      <button type="button" class="danger" id="deleteBtn">Delete</button>
+      <div class="right">
+        <button type="button" id="cancelBtn">Cancel</button>
+        <button type="submit" class="primary" id="saveBtn">Create</button>
+      </div>
+    </div>
+  </form>
+</dialog>
+
+<div class="toast" id="toast"></div>
+
+<script>
+const STATUS = { open: "Open", in_progress: "In progress", resolved: "Resolved", closed: "Closed" };
+const PRIORITY = { low: "Low", medium: "Medium", high: "High", urgent: "Urgent" };
+const $ = (id) => document.getElementById(id);
+const dlg = $("dlg"), form = $("form");
+let editingId = null;
+
+const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
+const pill = (value, labels) => `<span class="pill" style="--c: var(--${value})">${labels[value]}</span>`;
+const ago = (iso) => {
+  const s = (Date.now() - new Date(iso.endsWith("Z") || iso.includes("+") ? iso : iso + "Z")) / 1000;
+  if (s < 60) return "just now";
+  if (s < 3600) return `${Math.floor(s / 60)}m ago`;
+  if (s < 86400) return `${Math.floor(s / 3600)}h ago`;
+  return `${Math.floor(s / 86400)}d ago`;
+};
+
+function toast(msg) {
+  const t = $("toast"); t.textContent = msg; t.classList.add("show");
+  clearTimeout(toast.timer); toast.timer = setTimeout(() => t.classList.remove("show"), 2000);
+}
+
+async function api(path, options = {}) {
+  const res = await fetch(`/api${path}`, { headers: { "Content-Type": "application/json" }, ...options });
+  if (!res.ok) throw new Error((await res.json().catch(() => ({}))).detail || res.statusText);
+  return res.status === 204 ? null : res.json();
+}
+
+async function loadStats() {
+  const { total, by_status } = await api("/tickets/stats");
+  const current = $("fStatus").value;
+  const cards = [["", "Total", total], ...Object.entries(by_status).map(([k, v]) => [k, STATUS[k], v])];
+  $("stats").innerHTML = cards.map(([key, label, value]) =>
+    `<div class="stat ${key === current ? "active" : ""}" data-status="${key}"><div class="label">${label}</div><div class="value">${value}</div></div>`
+  ).join("");
+}
+
+async function loadTickets() {
+  const params = new URLSearchParams();
+  if ($("search").value.trim()) params.set("q", $("search").value.trim());
+  if ($("fStatus").value) params.set("status", $("fStatus").value);
+  if ($("fPriority").value) params.set("priority", $("fPriority").value);
+  const tickets = await api(`/tickets?${params}`);
+  $("empty").hidden = tickets.length > 0;
+  $("rows").innerHTML = tickets.map((t) => `
+    <tr data-id="${t.id}">
+      <td class="id">#${t.id}</td>
+      <td><div class="title">${esc(t.title)}</div>${t.description ? `<div class="desc">${esc(t.description)}</div>` : ""}</td>
+      <td>${pill(t.status, STATUS)}</td>
+      <td>${pill(t.priority, PRIORITY)}</td>
+      <td class="hide-sm">${t.assignee ? esc(t.assignee) : '<span class="muted">—</span>'}</td>
+      <td class="hide-sm muted">${ago(t.updated_at)}</td>
+    </tr>`).join("");
+}
+
+const refresh = () => Promise.all([loadStats(), loadTickets()]).catch((e) => toast(e.message));
+
+function openDialog(ticket = null) {
+  editingId = ticket?.id ?? null;
+  form.reset();
+  $("dlgTitle").textContent = ticket ? `Ticket #${ticket.id}` : "New ticket";
+  $("saveBtn").textContent = ticket ? "Save changes" : "Create";
+  $("deleteBtn").hidden = !ticket;
+  $("statusField").hidden = !ticket;
+  $("meta").textContent = ticket ? `Created ${new Date(ticket.created_at + "Z").toLocaleString()}` : "";
+  if (ticket) for (const k of ["title", "description", "status", "priority", "assignee"]) form.elements[k].value = ticket[k] ?? "";
+  dlg.showModal();
+  form.elements.title.focus();
+}
+
+form.addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const data = Object.fromEntries(new FormData(form));
+  data.assignee = data.assignee.trim() || null;
+  if (!editingId) delete data.status;
+  try {
+    if (editingId) await api(`/tickets/${editingId}`, { method: "PATCH", body: JSON.stringify(data) });
+    else await api("/tickets", { method: "POST", body: JSON.stringify(data) });
+    dlg.close();
+    toast(editingId ? "Ticket updated" : "Ticket created");
+    refresh();
+  } catch (err) { toast(err.message); }
+});
+
+$("deleteBtn").onclick = async () => {
+  if (!confirm(`Delete ticket #${editingId}?`)) return;
+  await api(`/tickets/${editingId}`, { method: "DELETE" });
+  dlg.close(); toast("Ticket deleted"); refresh();
+};
+$("cancelBtn").onclick = () => dlg.close();
+$("newBtn").onclick = () => openDialog();
+$("rows").onclick = async (e) => {
+  const row = e.target.closest("tr[data-id]");
+  if (row) openDialog(await api(`/tickets/${row.dataset.id}`));
+};
+$("stats").onclick = (e) => {
+  const card = e.target.closest(".stat");
+  if (card) { $("fStatus").value = card.dataset.status; refresh(); }
+};
+let searchTimer;
+$("search").oninput = () => { clearTimeout(searchTimer); searchTimer = setTimeout(loadTickets, 250); };
+$("fStatus").onchange = refresh;
+$("fPriority").onchange = loadTickets;
+
+refresh();
+</script>
+</body>
+</html>
