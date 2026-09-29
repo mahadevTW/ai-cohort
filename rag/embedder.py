@@ -1,10 +1,14 @@
-from sentence_transformers import SentenceTransformer
+from functools import lru_cache
 
 
 MODEL_NAME = "all-MiniLM-L6-v2"
 
-# Load the model once.
-_model = SentenceTransformer(MODEL_NAME)
+@lru_cache(maxsize=1)
+def _get_model():
+    """Load the embedding model on first use, not while importing the API."""
+    from sentence_transformers import SentenceTransformer
+
+    return SentenceTransformer(MODEL_NAME)
 
 
 def embed_chunks(chunks):
@@ -30,7 +34,7 @@ def embed_chunks(chunks):
 
         embedding_texts.append(text)
 
-    embeddings = _model.encode(
+    embeddings = _get_model().encode(
         embedding_texts,
         convert_to_numpy=True,
         normalize_embeddings=True,

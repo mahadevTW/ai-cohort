@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from uuid import UUID,uuid4
 
@@ -18,8 +18,8 @@ def _ensure_sqlite_schema_columns():
 
     SQLModel.metadata.create_all() is sufficient for brand new databases, but it
     does not ALTER a table in-place when the database already exists. That leaves
-    older SQLite files without the optional analytics columns declared in the
-    model layer (e.g. ChatSession.size_before_compaction and ChatMessage.size).
+    older SQLite files without optional columns declared in the model layer
+    (e.g. ChatSession size counters and ChatMessage.size/tool_name).
     """
     inspector = inspect(session_engine)
 
@@ -44,6 +44,10 @@ def _ensure_sqlite_schema_columns():
         if "chat_messages" in inspector.get_table_names() and "size" not in message_columns:
             conn.exec_driver_sql(
                 "ALTER TABLE chat_messages ADD COLUMN size INTEGER"
+            )
+        if "chat_messages" in inspector.get_table_names() and "tool_name" not in message_columns:
+            conn.exec_driver_sql(
+                "ALTER TABLE chat_messages ADD COLUMN tool_name VARCHAR"
             )
 
 
@@ -119,14 +123,14 @@ def insert_chat_compaction(chat_compaction: ChatCompaction):
             if incoming_timestamp:
                 existing.created_at = incoming_timestamp
             else:
-                existing.created_at = datetime.utcnow()
+                existing.created_at = datetime.now(timezone.utc)
             session.add(existing)
             session.commit()
             session.refresh(existing)
             return existing
 
         if getattr(chat_compaction, "created_at", None) is None:
-            chat_compaction.created_at = datetime.utcnow()
+            chat_compaction.created_at = datetime.now(timezone.utc)
 
         session.add(chat_compaction)
         session.commit()

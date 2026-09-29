@@ -5,7 +5,7 @@ from sqlmodel import SQLModel, create_engine
 
 import database.db as repository
 from database.models import User, ChatSession, ChatMessage, MessageRole, ChatCompaction
-from openai_client import openai_chat
+from openai_client import openai_chat, db_insert_user
 
 
 def setup_module():
@@ -98,14 +98,16 @@ def test_insert_user():
 
     user = User(
         id=uuid.uuid4(),
-        name="Mahadev"
+        name="Insert User"
     )
 
     repository.insert_user(user)
 
-    sessions = repository.select_all_chat_sessions_for_userid(user.id)
+    found = repository.select_user_by_id(user.id)
 
-    assert sessions == []
+    assert found is not None
+    assert found.id == user.id
+    assert found.name == "Insert User"
 
 
 def test_insert_chat_session():

@@ -244,7 +244,7 @@ async function loadChatHistory() {
     } catch (err) {
         history.innerHTML = "";
         const error = document.createElement("div");
-        error.innerText = "Unable to load chat history.";
+        error.innerText = "Unable to load chat history: " + (err.message || "request failed");
         error.style.cssText = "padding:10px;color:#fca5a5;font-size:14px;";
         history.appendChild(error);
         console.error(err);
@@ -277,7 +277,10 @@ async function openChatSession(selectedSessionId, chatTitle) {
             chatBox.appendChild(empty);
         } else {
             messages.forEach((message) => {
-                addMessage(message.message, message.role === "user");
+                const displayText = message.tool_name
+                    ? "Tool result (" + message.tool_name + "):\n" + message.message
+                    : message.message;
+                addMessage(displayText, message.role === "user");
             });
         }
 
@@ -331,6 +334,7 @@ document.getElementById("userForm").addEventListener("submit", async (event) => 
     try {
         await validateEnteredUserId(enteredUserId);
         userId = enteredUserId;
+        localStorage.setItem("chatUserId", userId);
         enableChatInterface();
         userModal.style.display = "none";
         addMessage("Welcome! How can I help you?", false);
@@ -344,7 +348,7 @@ document.getElementById("userForm").addEventListener("submit", async (event) => 
 
 window.addEventListener("DOMContentLoaded", () => {
     const params = new URLSearchParams(window.location.search);
-    const existingUserId = params.get("user_id");
+    const existingUserId = params.get("user_id") || localStorage.getItem("chatUserId");
 
     if (existingUserId) {
         userId = existingUserId;
@@ -355,6 +359,7 @@ window.addEventListener("DOMContentLoaded", () => {
             })
             .catch((err) => {
                 userId = null;
+                localStorage.removeItem("chatUserId");
                 userIdInput.value = existingUserId;
                 userModal.style.display = "flex";
                 const error = document.getElementById("userError");
@@ -474,25 +479,33 @@ async function sendMessage() {
             }
         );
 
-        const data = await response.json();
+        const rawResponseText = await response.text();
+        let data;
+        try {
+            data = rawResponseText ? JSON.parse(rawResponseText) : {};
+        } catch {
+            data = { detail: rawResponseText || response.statusText };
+        }
 
         if (!response.ok) {
-            throw new Error(data.detail || "Chat request failed.");
+            const detail = data.detail || data.message || "Chat request failed.";
+            throw new Error("HTTP " + response.status + ": " + detail);
         }
 
         sessionId = data.session_id || sessionId;
+        await loadChatHistory();
 
         if (typingRow.parentNode) {
             chatBox.removeChild(typingRow);
         }
 
-        const responseText = data.response || "No response received.";
+        const replyText = data.response || "No response received.";
 
-        if (responseText === "Chat session size exceeds limit. Please compress the chat") {
+        if (replyText === "Chat session size exceeds limit. Please compress the chat") {
             disableChatInterface("Chat session size exceeds limit. Do you want to compress the chat or start new chat session");
             renderLimitPrompt();
         } else {
-            addMessage(responseText, false);
+            addMessage(replyText, false);
         }
 
     } catch (err) {
@@ -501,7 +514,11 @@ async function sendMessage() {
             chatBox.removeChild(typingRow);
         }
 
-        addMessage("Failed to connect to server.", false);
+        const messageText = err instanceof TypeError
+            ? "Could not reach the chat server. Check that it is running at this address."
+            : "Chat request failed: " + (err.message || "unknown error");
+        addMessage(messageText, false);
+        await loadChatHistory();
         console.error(err);
     }
 }

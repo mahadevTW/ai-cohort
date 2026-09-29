@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, timezone
 from enum import Enum
 from typing import List, Optional
 from uuid import UUID, uuid4
@@ -34,9 +34,13 @@ class ChatSession(SQLModel, table=True):
     # existing database column named "title".
     session_title: str = Field(sa_column=Column("title", String, nullable=False))
 
-    created_at: datetime = Field(default_factory=datetime.utcnow)
+    created_at: datetime = Field(
+        default_factory=lambda: datetime.now(timezone.utc)
+    )
 
-    last_modified_at: datetime = Field(default_factory=datetime.utcnow)
+    last_modified_at: datetime = Field(
+        default_factory=lambda: datetime.now(timezone.utc)
+    )
 
     user_id: UUID = Field(foreign_key="users.id")
     size_before_compaction: Optional[int] = Field(default=None, sa_column=Column("size_before_compaction", Integer, nullable=True))
@@ -51,12 +55,21 @@ class ChatMessage(SQLModel, table=True):
     id: UUID = Field(default_factory=uuid4, primary_key=True)
     message: str = Field(sa_column=Column("text", String, nullable=False))
     created_at: datetime = Field(
-        sa_column=Column("timestamp", DateTime, nullable=False, default=datetime.utcnow)
+        sa_column=Column(
+            "timestamp",
+            DateTime(timezone=True),
+            nullable=False,
+            default=lambda: datetime.now(timezone.utc),
+        )
     )
     role: MessageRole
     session_id: UUID = Field(foreign_key="chat_sessions.id")
     user_id: UUID = Field(foreign_key="users.id")
     size: Optional[int] = Field(default=None, sa_column=Column("size", Integer, nullable=True))
+    tool_name: Optional[str] = Field(
+        default=None,
+        sa_column=Column("tool_name", String, nullable=True),
+    )
 
 class ChatCompaction(SQLModel, table=True):
     __tablename__ = "chat_compactions"
@@ -64,5 +77,10 @@ class ChatCompaction(SQLModel, table=True):
     session_id: UUID = Field(foreign_key="chat_sessions.id")
     compacted_message: str = Field(sa_column=Column("compacted_text", String, nullable=False))
     created_at: datetime = Field(
-        sa_column=Column("timestamp", DateTime, nullable=False, default=datetime.utcnow)
+        sa_column=Column(
+            "timestamp",
+            DateTime(timezone=True),
+            nullable=False,
+            default=lambda: datetime.now(timezone.utc),
+        )
     )

@@ -1,5 +1,7 @@
 import os
 import sys
+import logging
+import json
 from typing import Optional
 from uuid import UUID
 
@@ -12,9 +14,9 @@ if SERVER_DIR not in sys.path:
 
 from database.models import ChatCompaction, ChatMessage, ChatSession, User
 from fastapi import FastAPI, HTTPException, Request
-from database.db import create_db_and_tables, insert_chat_compaction, insert_chat_message, insert_chat_session, insert_user, recalculate_chat_session_sizes, select_all_chat_messages_for_session_id, select_all_chat_sessions_for_userid, select_chat_session_by_id, select_latest_chat_compaction_for_session_id, select_user_by_id, update_chat_session_size,select_chat_messages_for_session_id_after
-from openai_client import compact_messages, openai_chat
-from rag.query import build_rag_context, search_chromadb
+from fastapi.responses import JSONResponse
+from database.db import create_db_and_tables, recalculate_chat_session_sizes, select_all_chat_messages_for_session_id, select_all_chat_sessions_for_userid, select_chat_session_by_id, select_latest_chat_compaction_for_session_id, select_user_by_id, update_chat_session_size,select_chat_messages_for_session_id_after
+from openai_client import compact_messages, openai_chat, db_insert_user, db_insert_chat_session, db_insert_chat_message, db_insert_chat_compaction
 import uvicorn
 from fastapi.templating import Jinja2Templates
 
@@ -23,6 +25,63 @@ templates = Jinja2Templates(directory=os.path.join(BASE_DIR, "templates"))
 
 app = FastAPI()
 create_db_and_tables()
+logger = logging.getLogger(__name__)
+
+
+@app.exception_handler(Exception)
+async def unhandled_exception_handler(request: Request, exc: Exception):
+    """Log uncaught API failures and return their diagnostic in JSON."""
+    logger.exception("Unhandled error for %s %s", request.method, request.url.path)
+    return JSONResponse(
+        status_code=500,
+        content={
+            "detail": f"{type(exc).__name__}: {exc}"
+        },
+    )
+
+
+def get_chat_response(
+    message,
+    *,
+    history=None,
+    compacted_message=None,
+    rag_context=None,
+    session_id=None,
+    user_id=None,
+):
+    """Call the chat provider and log/report provider transport failures clearly."""
+
+    def save_tool_result(tool_name, result):
+        if isinstance(result, str):
+            tool_message = result
+        else:
+            tool_message = json.dumps(result, ensure_ascii=False, default=str)
+
+        db_insert_chat_message(
+            message=ChatMessage(
+                message=tool_message,
+                role="assistant",
+                session_id=session_id,
+                user_id=user_id,
+                size=len(tool_message),
+                tool_name=tool_name,
+            )
+        )
+
+    try:
+        return openai_chat(
+            message,
+            history=history,
+            compacted_message=compacted_message,
+            rag_context=rag_context,
+            tool_result_callback=save_tool_result,
+        )
+    except Exception as exc:
+        logger.exception("Chat provider request failed")
+        raise HTTPException(
+            status_code=502,
+            detail=f"Chat provider request failed ({type(exc).__name__}): {exc}",
+        ) from exc
 
 
 @app.get("/")
@@ -38,7 +97,7 @@ def create_user(user: User):
     user.name = user.name.strip()
     if not user.name:
         raise HTTPException(status_code=422, detail="Name cannot be empty")
-    insert_user(user)
+    db_insert_user(user)
     return {"id": str(user.id), "name": user.name}
 
 
@@ -71,6 +130,7 @@ def get_session_messages(session_id: UUID, user_id: UUID):
             "id": str(message.id),
             "message": message.message,
             "role": message.role,
+            "tool_name": message.tool_name,
             "created_at": message.created_at,
         }
         for message in messages
@@ -88,7 +148,7 @@ def compact_chat_messages(session_id: UUID):
         raise HTTPException(status_code=404, detail="No messages found for this session")
 
     compacted_message = compact_messages(messages)
-    compaction_record = insert_chat_compaction(
+    compaction_record = db_insert_chat_compaction(
         ChatCompaction(
             session_id=chat_session.id,
             compacted_message=compacted_message,
@@ -102,56 +162,6 @@ def compact_chat_messages(session_id: UUID):
         "compaction_id": str(compaction_record.id),
         "total_size": total_size,
     }
-
-def retrieve_policy_context(
-    message: str,
-    n_results: int = 5,
-) -> str:
-    """
-    Search ChromaDB for policy chunks relevant to
-    the user's current question.
-
-    Returns formatted text context for the LLM.
-    """
-
-    print("\n========================================")
-    print("RAG SEARCH")
-    print("========================================")
-    print(f"Question: {message}")
-    print(f"Retrieving top {n_results} chunks...")
-
-    results = search_chromadb(
-        query=message,
-        n_results=n_results,
-    )
-
-    # Optional debugging
-    ids = results.get("ids", [[]])[0]
-    distances = results.get("distances", [[]])[0]
-
-    print(f"Chunks retrieved: {len(ids)}")
-
-    for index, record_id in enumerate(ids):
-        distance = (
-            distances[index]
-            if index < len(distances)
-            else None
-        )
-
-        print(
-            f"  {index + 1}. "
-            f"ID={record_id}, "
-            f"distance={distance}"
-        )
-
-    rag_context = build_rag_context(
-        results
-    )
-
-    print("RAG context created.")
-    print("========================================\n")
-
-    return rag_context
 
 @app.post("/chat")
 def chat_endpoint(message: Optional[str] = None, user_id: Optional[str] = None, session_id: Optional[str] = None, chat_title: Optional[str] = None):
@@ -206,8 +216,8 @@ def chat_endpoint(message: Optional[str] = None, user_id: Optional[str] = None, 
             title = "New chat"
 
         # Create new session
-        session = insert_chat_session(
-            chat_session=ChatSession(
+        session = db_insert_chat_session(
+            session=ChatSession(
                 user_id=UUID(user_id),
                 session_title=title[:100]
             )
@@ -220,30 +230,8 @@ def chat_endpoint(message: Optional[str] = None, user_id: Optional[str] = None, 
                 "session_id": session.id
             }
 
-        # ====================================================
-        # RAG SEARCH
-        # ====================================================
-
-        rag_context = retrieve_policy_context(
-            message,
-            n_results=5,
-        )
-
-        # ====================================================
-        # CALL LLM
-        # ====================================================
-
-        response = openai_chat(
-            message,
-            rag_context=rag_context,
-        )
-
-        # ====================================================
-        # SAVE USER MESSAGE
-        # ====================================================
-
-        insert_chat_message(
-            chat_message=ChatMessage(
+        db_insert_chat_message(
+            message=ChatMessage(
                 message=message,
                 role="user",
                 session_id=session.id,
@@ -253,11 +241,21 @@ def chat_endpoint(message: Optional[str] = None, user_id: Optional[str] = None, 
         )
 
         # ====================================================
+        # CALL LLM
+        # ====================================================
+
+        response = get_chat_response(
+            message,
+            session_id=session.id,
+            user_id=session.user_id,
+        )
+
+        # ====================================================
         # SAVE ASSISTANT MESSAGE
         # ====================================================
 
-        insert_chat_message(
-            chat_message=ChatMessage(
+        db_insert_chat_message(
+            message=ChatMessage(
                 message=response,
                 role="assistant",
                 session_id=session.id,
@@ -321,18 +319,6 @@ def chat_endpoint(message: Optional[str] = None, user_id: Optional[str] = None, 
         )
 
     # ========================================================
-    # RAG SEARCH
-    #
-    # IMPORTANT:
-    # This happens for EVERY user question.
-    # ========================================================
-
-     rag_context = retrieve_policy_context(
-        message,
-        n_results=5,
-    )
-
-    # ========================================================
     # GET CONVERSATION HISTORY / COMPACTION
     # ========================================================
 
@@ -351,14 +337,7 @@ def chat_endpoint(message: Optional[str] = None, user_id: Optional[str] = None, 
             )
         )
 
-        response = openai_chat(
-            message,
-            history=messages,
-            compacted_message=(
-                latest_compaction.compacted_message
-            ),
-            rag_context=rag_context,
-        )
+        compacted_message = latest_compaction.compacted_message
 
      else:
 
@@ -368,32 +347,32 @@ def chat_endpoint(message: Optional[str] = None, user_id: Optional[str] = None, 
             )
         )
 
-        response = openai_chat(
-            message,
-            history=messages,
-            rag_context=rag_context,
-        )
+        compacted_message = None
 
-    # ========================================================
-    # SAVE USER MESSAGE
-    # ========================================================
-
-     insert_chat_message(
-        chat_message=ChatMessage(
+     db_insert_chat_message(
+        message=ChatMessage(
             message=message,
             role="user",
             session_id=sid,
             user_id=chat_session.user_id,
             size=len(message),
         )
-    )
+     )
+
+     response = get_chat_response(
+        message,
+        history=messages,
+        compacted_message=compacted_message,
+        session_id=sid,
+        user_id=chat_session.user_id,
+     )
 
     # ========================================================
     # SAVE ASSISTANT RESPONSE
     # ========================================================
 
-     insert_chat_message(
-        chat_message=ChatMessage(
+     db_insert_chat_message(
+        message=ChatMessage(
             message=response,
             role="assistant",
             session_id=sid,
@@ -426,4 +405,4 @@ def chat_endpoint(message: Optional[str] = None, user_id: Optional[str] = None, 
     # make api call to some model provider and generate response and give it back to the user
 
 if __name__ == "__main__":
-    uvicorn.run("server:app", host="0.0.0.0", port=8000, reload=True)
+    uvicorn.run("server:app", host="0.0.0.0", port=8070, reload=True)
