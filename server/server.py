@@ -16,7 +16,6 @@ from openai_client import (
     run_chat_with_weather_tools,
     save_chat_message,
 )
-from rag import get_rag_context
 import uvicorn
 from fastapi.templating import Jinja2Templates
 # load values from .env file and set them as environment variables
@@ -70,10 +69,6 @@ def chat_endpoint(message: str, user_id:str, session_id: Optional[str] = None):
     # save user message into db
     # save llm response to db
     
-    # RAG remains best-effort and is included in both ordinary and tool-assisted
-    # responses. The model decides whether the weather tools are needed.
-    rag_context = get_rag_context(message)
-
     # Check the actual context sent to the model: latest compaction summary plus
     # messages created after that compaction's timestamp.
     current_size = get_active_session_size(UUID(session_id)) if session_id else 0
@@ -107,7 +102,6 @@ def chat_endpoint(message: str, user_id:str, session_id: Optional[str] = None):
                 message,
                 history=context.history,
                 compaction_summary=context.compaction_summary,
-                rag_context=rag_context,
                 session_id=sid,
             ):
                 if event["type"] in {"message", "error"}:

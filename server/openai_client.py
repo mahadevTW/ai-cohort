@@ -25,6 +25,7 @@ from database.models import ChatMessage, ChatSession, CompactionResult
 from dotenv import load_dotenv
 from fastmcp import Client
 from openai import APIStatusError, OpenAI
+from rag import get_rag_context
 from weather_tool import get_lat_long, get_todays_date, get_wether_by_lat_long, tools as weather_tools
 
 # server.py imports this module before loading .env, so load the root .env here
@@ -47,6 +48,36 @@ TOOL_STATUS = {
     "get_lat_long_for_city": lambda args: f"Finding the location: {args.get('city', 'your city')}...",
     "get_wether_by_lat_long": lambda _: "Fetching weather information...",
 }
+RAG_TOOL_NAME = "search_knowledge_base"
+rag_tools = [{
+    "type": "function",
+    "function": {
+        "name": RAG_TOOL_NAME,
+        "description": (
+            "Search the company policy and knowledge base. Use this only when the user asks "
+            "about company policies, procedures, benefits, security, onboarding, leave, travel, "
+            "or other internal organizational information."
+        ),
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "query": {
+                    "type": "string",
+                    "description": "The focused question or search phrase to look up.",
+                },
+                "top_k": {
+                    "type": "integer",
+                    "description": "Number of relevant passages to retrieve.",
+                    "minimum": 1,
+                    "maximum": 5,
+                    "default": 3,
+                },
+            },
+            "required": ["query"],
+            "additionalProperties": False,
+        },
+    },
+}]
 
 
 @dataclass
@@ -208,6 +239,18 @@ def _tool_result(tool_name: str, arguments: dict[str, Any]) -> str:
         return json.dumps({"error": "Weather data could not be retrieved."})
 
 
+def _rag_tool_result(arguments: dict[str, Any]) -> str:
+    query = arguments.get("query")
+    top_k = arguments.get("top_k", 3)
+    if not isinstance(query, str) or not query.strip():
+        return json.dumps({"error": "A search query is required."})
+    if not isinstance(top_k, int) or isinstance(top_k, bool) or not 1 <= top_k <= 5:
+        return json.dumps({"error": "top_k must be an integer between 1 and 5."})
+
+    context = get_rag_context(query.strip(), top_k=top_k)
+    return context or json.dumps({"error": "No relevant information was found."})
+
+
 def _openai_tools(mcp_tools: list[Any]) -> list[dict[str, Any]]:
     """Convert MCP tool definitions to the OpenAI function-tool format."""
     return [
@@ -284,7 +327,7 @@ def run_chat_with_weather_tools(
     attempts = max(1, attempts)
     messages = _build_messages(message, history, compaction_summary, rag_context)
     mcp_tools = discover_mcp_tools()
-    tools = weather_tools + mcp_tools
+    tools = weather_tools + rag_tools + mcp_tools
     yield {"type": "status", "message": "Analyzing your request..."}
 
     for attempt in range(1, attempts + 1):
@@ -331,7 +374,11 @@ def run_chat_with_weather_tools(
                 yield {"type": "status", "message": "I couldn’t read the weather request details; retrying safely..."}
                 tool_content = json.dumps({"error": "Invalid tool arguments."})
             else:
-                if is_mcp_tool:
+                is_rag_tool = tool_name == RAG_TOOL_NAME
+                if is_rag_tool:
+                    status = "Searching the knowledge base..."
+                    tool_content = _rag_tool_result(arguments)
+                elif is_mcp_tool:
                     status = "Checking the ticketing system..."
                     tool_content = _run_mcp_tool(tool_name, arguments)
                 else:
@@ -341,7 +388,13 @@ def run_chat_with_weather_tools(
                 if "\"error\"" in tool_content:
                     yield {"type": "status", "message": "The requested information was unavailable; preparing a safe response..."}
                 else:
-                    yield {"type": "status", "message": "Ticketing information received." if is_mcp_tool else "Weather data received."}
+                    if is_rag_tool:
+                        status_message = "Knowledge base results received."
+                    elif is_mcp_tool:
+                        status_message = "Ticketing information received."
+                    else:
+                        status_message = "Weather data received."
+                    yield {"type": "status", "message": status_message}
             if session_id is not None:
                 save_chat_message(session_id, tool_content, "assistant", tool_name)
             messages.append({"role": "tool", "tool_call_id": tool_call.id, "content": tool_content})
